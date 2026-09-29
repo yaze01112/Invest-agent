@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - run: python update_data.py
+      - run: python "update data.py"
       - run: mkdir -p site && cp index.html data.json site/
       - uses: actions/upload-pages-artifact@v3
         with:
