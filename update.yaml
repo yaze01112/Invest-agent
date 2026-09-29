@@ -1,0 +1,38 @@
+name: 更新股價並發佈網頁
+
+on:
+  schedule:
+    - cron: "45 6 * * 1-5"   # 台灣時間 14:45（收盤後）
+    - cron: "0 10 * * 1-5"   # 台灣時間 18:00 再補一次
+  workflow_dispatch:          # 可以手動按「Run workflow」
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python update_data.py
+      - run: mkdir -p site && cp index.html data.json site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
