@@ -137,6 +137,34 @@ nav button[aria-selected=true]{color:var(--agent);font-weight:700}
 .toast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;
   max-width:92%;background:var(--ink);color:var(--paper);font-size:13px;line-height:1.5;padding:10px 14px;border-radius:10px;display:none}
 .toast.on{display:block}
+
+/* ===== 電腦版：一頁看完所有區塊 ===== */
+@media (min-width:1000px){
+  body{padding-bottom:84px}
+  .wrap{max-width:1280px;padding:0 28px}
+  body>.wrap{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px 22px;align-items:start}
+  body>.wrap>header,body>.wrap>.foot{grid-column:1/-1}
+  header{padding:22px 0 0} header h1{font-size:22px}
+  .tab,.tab.on{display:block;background:var(--surface);border-radius:18px;padding:6px 26px 22px}
+  #t-home{grid-column:1;grid-row:2/4}
+  #t-pos{grid-column:2;grid-row:2}
+  #t-log{grid-column:2;grid-row:3/5}
+  #t-ana{grid-column:1;grid-row:4}
+  #t-log #log{max-height:720px;overflow:auto;margin-right:-10px;padding-right:10px}
+  #t-home .chart{height:340px}
+  #tstats{grid-template-columns:repeat(3,1fr)}
+  .hero .big{font-size:56px}
+  .order,.pos{background:var(--paper)}
+  .stats{grid-template-columns:repeat(4,1fr)}
+  .stats div:nth-child(n){padding:14px 12px;border-right:1px solid var(--line)}
+  .stats div:last-child{border-right:0}
+  #t-ana .chart{height:220px}
+  nav{display:none}
+  .player{bottom:0;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .player .wrap{display:flex;height:70px}
+  .sheet-bg{align-items:center}
+  .sheet{border-radius:18px;max-height:84vh}
+}
 </style>
 </head>
 <body>
@@ -152,6 +180,7 @@ nav button[aria-selected=true]{color:var(--agent);font-weight:700}
       <p class="big"><small>NT$</small><span id="eq"></span></p>
       <p class="chg" id="chg"></p>
       <p class="vs" id="vs"></p>
+      <p class="vs" id="mkt"></p>
     </div>
     <div class="legend"><span><i style="background:var(--agent)"></i>代理人</span><span><i style="background:var(--bench)"></i>0050 買進持有</span></div>
     <div class="chart"><canvas id="c-eq" aria-label="資產走勢圖"></canvas></div>
@@ -172,10 +201,15 @@ nav button[aria-selected=true]{color:var(--agent);font-weight:700}
     <div class="chart" style="height:180px"><canvas id="c-m"></canvas></div>
     <h2>回撤 <span class="muted">離最高點跌了多少</span></h2>
     <div class="chart" style="height:130px"><canvas id="c-dd"></canvas></div>
+    <h2>交易統計 <span class="muted">判斷策略是否可靠</span></h2>
+    <div class="stats" id="tstats" style="margin-top:0"></div>
+    <p class="note" id="tnote"></p>
     <h2>出場原因 <span class="muted">總損益</span></h2>
     <div id="reasons"></div>
     <h2>各股損益</h2>
     <div id="stocks"></div>
+    <h2>族群損益 <span class="muted">看風險是否集中</span></h2>
+    <div id="sectors"></div>
   </section>
 
   <section class="tab" id="t-log">
@@ -233,10 +267,14 @@ nav button[aria-selected=true]{color:var(--agent);font-weight:700}
   <label class="field"><span>出場均線<small>收盤跌破就賣</small></span>
     <select id="f-exitEma"><option value="10">EMA10（跑得快）</option><option value="20">EMA20（抱得久）</option></select></label>
   <label class="field"><span>最低成交量<small>20 日均量，張</small></span><input id="f-minLots" type="number" inputmode="numeric" step="100" min="0"></label>
-  <label class="field"><span>進場門檻<small>5 個條件要符合幾個</small></span><input id="f-minScore" type="number" inputmode="numeric" min="1" max="5"></label>
+  <label class="field"><span>進場門檻<small>6 個條件要符合幾個</small></span><input id="f-minScore" type="number" inputmode="numeric" min="1" max="6"></label>
+  <label class="field"><span>同族群最多<small>檔，避免押在同一產業</small></span><input id="f-maxPerSector" type="number" inputmode="numeric" min="1" max="5"></label>
+  <label class="field"><span>大盤濾網<small>0050 跌破 60 日均線就不買</small></span><select id="f-mktFilter"><option value="1">開</option><option value="0">關</option></select></label>
+  <label class="field"><span>長線濾網<small>股價要在 200 日均線之上</small></span><select id="f-longFilter"><option value="1">開</option><option value="0">關</option></select></label>
+  <label class="field"><span>保本停損<small>賺到 1.5 倍風險後停損移到成本</small></span><select id="f-breakeven"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>手續費折扣<small>例：0.28 代表 2.8 折</small></span><input id="f-discount" type="number" inputmode="decimal" step="0.01" min="0.1" max="1"></label>
   <button class="primary" id="apply">重新執行代理人</button>
-  <p class="note">進場條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、停損放寬到 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。</p>
+  <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。</p>
 </div></div>
 
 <div class="loading" id="loading"><div><div class="spin"></div><p id="load-msg">準備中</p></div></div>
@@ -258,9 +296,19 @@ const UNIVERSES = {
   ["3008","大立光"],["2395","研華"],["1216","統一"],["2207","和泰車"],["5871","中租-KY"]]};
 const NAMES = Object.fromEntries([...UNIVERSES.tech,...UNIVERSES.mixed]);
 const UNI_LABEL = {tech:"科技股", mixed:"權值綜合"};
+const SECTOR = {
+  "2330":"晶圓代工","2303":"晶圓代工","3711":"封測","2449":"封測",
+  "2454":"IC設計","2379":"IC設計","3034":"IC設計","3661":"IC設計","3443":"IC設計","5269":"IC設計","3529":"IC設計","4966":"IC設計",
+  "2317":"AI伺服器","2382":"AI伺服器","3231":"AI伺服器","6669":"AI伺服器","2356":"AI伺服器",
+  "2376":"電腦板卡","2357":"電腦板卡","2377":"電腦板卡","3017":"散熱","3324":"散熱",
+  "2308":"電源元件","2327":"電源元件","3037":"PCB載板","8046":"PCB載板","3189":"PCB載板","2383":"PCB載板","6274":"PCB載板",
+  "2345":"網通","2412":"電信","3008":"光學","2395":"工業電腦",
+  "2881":"金融","2882":"金融","2891":"金融","2886":"金融","5871":"金融",
+  "2603":"航運","2609":"航運","2615":"航運","1301":"塑化鋼鐵","2002":"塑化鋼鐵","1216":"食品汽車","2207":"食品汽車"};
+const N_COND = 6;
 const PRESETS = {
-  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:3, exitEma:20, minLots:500},
-  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:4, exitEma:10, minLots:1000}};
+  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1},
+  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1}};
 const DEFAULT_CFG = {capital:100000, discount:1, minFee:1, feeRate:0.001425, tax:0.003, minPrice:10, ...PRESETS.aggressive};
 let UNI="tech", UNIVERSE=UNIVERSES.tech, STYLE="aggressive";
 
@@ -344,7 +392,9 @@ function indicators(s){
     atr.push(atr[i-1]+(tr-atr[i-1])/14);
   }
   const hi=rollMax(s.h,20);
+  const e12=ema(s.c,12), e26=ema(s.c,26), macd=e12.map((x,i)=>x-e26[i]), sig=ema(macd,9);
   Object.assign(s,{e5:ema(s.c,5),e10:ema(s.c,10),e20:ema(s.c,20),rsi,obv,obvH:rollMax(obv,20),atr,
+    hist:macd.map((x,i)=>i<34?NaN:x-sig[i]),ma200:rollMean(s.c,200),
     vm5:rollMean(s.v,5),vm20:rollMean(s.v,20),hi20:[NaN,...hi.slice(0,-1)]});
   s.at=new Map(s.dates.map((d,i)=>[d,i]));
   return s;
@@ -356,6 +406,7 @@ function score(s,i){
     "OBV創20日新高": s.obv[i]>=s.obvH[i],
     "RSI 50-70": s.rsi[i]>=50&&s.rsi[i]<=70,
     "突破20日高": s.c[i]>s.hi20[i],
+    "MACD翻多": s.hist[i]>0&&s.hist[i]>s.hist[i-1],
   };
   const ok=Object.keys(c).filter(k=>c[k]);
   return [ok.length,ok];
@@ -366,6 +417,9 @@ function runAgent(data,cfg,startDate){
   const S={}; for(const code in data.stocks) S[code]=indicators(data.stocks[code]);
   const dates=[...new Set(Object.values(S).flatMap(s=>s.dates))].sort();
   const benchAt=new Map(data.bench.dates.map((d,i)=>[d,data.bench.c[i]]));
+  const bMA=rollMean(data.bench.c,60), benchMAAt=new Map(data.bench.dates.map((d,i)=>[d,bMA[i]]));
+  let lastBMA=NaN;
+  const mkt=()=>({ok:!cfg.mktFilter||!(lastBMA>0)||lastBench>=lastBMA, bench:lastBench, ma:lastBMA, on:!!cfg.mktFilter});
   let cash=cfg.capital, pos={}, pBuys=[], pSells={}, lastBench=null, pre=null;
   const last={}, trades=[], snaps=[];
   const fee=a=>Math.max(Math.floor(a*cfg.feeRate*cfg.discount),cfg.minFee);
@@ -379,21 +433,32 @@ function runAgent(data,cfg,startDate){
   }
   function scan(bars){
     const free=cfg.maxPos-Object.keys(pos).length+Object.keys(pSells).length, cands=[];
+    if(!mkt().ok) return [];                      // 大盤在 60 日均線下：暫停新買進
     for(const code in bars){
       const s=S[code], i=bars[code];
       if(pos[code]||s.c[i]<cfg.minPrice||!(s.vm20[i]>=cfg.minLots*1000)||!(s.atr[i]>0)) continue;
+      if(cfg.longFilter&&!(s.c[i]>s.ma200[i])) continue;   // 長線趨勢：站上 200 日均線
       const [sc,rs]=score(s,i);
       if(sc>=cfg.minScore) cands.push({code,score:sc,reasons:rs,dist:cfg.atrMult*s.atr[i],vr:s.v[i]/s.vm5[i]});
     }
     cands.sort((a,b)=>b.score-a.score||b.vr-a.vr);
-    return cands.slice(0,Math.max(free,0));
+    // 同族群最多 maxPerSector 檔，降低持股相關性
+    const cnt={}, pick=[];
+    for(const c in pos) if(!pSells[c]){const k=SECTOR[c]||c;cnt[k]=(cnt[k]||0)+1}
+    for(const o of cands){
+      if(pick.length>=Math.max(free,0)) break;
+      const k=SECTOR[o.code]||o.code;
+      if((cnt[k]||0)>=cfg.maxPerSector) continue;
+      cnt[k]=(cnt[k]||0)+1; pick.push(o);
+    }
+    return pick;
   }
   for(let di=30;di<dates.length;di++){
     const date=dates[di], bars={};
     for(const code in S){const i=S[code].at.get(date); if(i!==undefined) bars[code]=i;}
-    if(benchAt.has(date)) lastBench=benchAt.get(date);
+    if(benchAt.has(date)){ lastBench=benchAt.get(date); lastBMA=benchMAAt.get(date); }
     // 起算日之前：只看盤、不交易（起算日前一天收盤決定第一批買單）
-    if(startDate&&date<startDate){ pBuys=scan(bars); pre={date,bench:lastBench,pBuys:pBuys.map(o=>({...o}))}; continue; }
+    if(startDate&&date<startDate){ pBuys=scan(bars); pre={date,bench:lastBench,mkt:mkt(),pBuys:pBuys.map(o=>({...o}))}; continue; }
     // 1) 開盤賣出
     for(const code of Object.keys(pSells)){
       if(pos[code]&&bars[code]!==undefined) sell(code,S[code].o[bars[code]],date,pSells[code]);
@@ -408,15 +473,15 @@ function runAgent(data,cfg,startDate){
       const shares=Math.floor(Math.min(eq*cfg.risk/100/o.dist, eq/cfg.maxPos/px, (cash-cfg.minFee)/(px*(1+cfg.feeRate))));
       if(shares<1) continue;
       const f=fee(px*shares); cash-=px*shares+f;
-      pos[o.code]={code:o.code,shares,entry:px,stop:px-o.dist,entryDate:date,days:0,buyFee:f,reasons:o.reasons};
-      trades.push({date,code:o.code,action:"BUY",price:px,shares,cost:f,reason:`${o.score}/5 分：`+o.reasons.join("、")});
+      pos[o.code]={code:o.code,shares,entry:px,stop:px-o.dist,r0:o.dist,be:false,exitLine:NaN,entryDate:date,days:0,buyFee:f,reasons:o.reasons};
+      trades.push({date,code:o.code,action:"BUY",price:px,shares,cost:f,reason:`${o.score}/${N_COND} 分：`+o.reasons.join("、")});
     }
     pBuys=[];
     // 3) 盤中停損
     for(const code of Object.keys(pos)){
       const i=bars[code]; if(i===undefined) continue;
       const s=S[code];
-      if(s.l[i]<=pos[code].stop){ sell(code,Math.min(s.o[i],pos[code].stop),date,"觸及ATR停損"); delete pSells[code]; }
+      if(s.l[i]<=pos[code].stop){ sell(code,Math.min(s.o[i],pos[code].stop),date,pos[code].be?"保本停損":"觸及ATR停損"); delete pSells[code]; }
     }
     // 4) 收盤：移動停損、出場判斷
     for(const code in bars) last[code]=S[code].c[bars[code]];
@@ -425,12 +490,14 @@ function runAgent(data,cfg,startDate){
       const s=S[code], p=pos[code];
       p.days++;
       p.stop=Math.max(p.stop,s.c[i]-cfg.atrMult*s.atr[i]);
-      if(s.c[i]<(cfg.exitEma===20?s.e20[i]:s.e10[i])) pSells[code]=`收盤跌破EMA${cfg.exitEma}`;
+      if(cfg.breakeven&&!p.be&&s.c[i]>=p.entry+1.5*p.r0){ p.be=true; p.stop=Math.max(p.stop,p.entry*1.006); } // 賺到 1.5R：停損移到成本（含交易成本）
+      p.exitLine=cfg.exitEma===20?s.e20[i]:s.e10[i];
+      if(s.c[i]<p.exitLine) pSells[code]=`收盤跌破EMA${cfg.exitEma}`;
       else if(p.days>=cfg.maxHold) pSells[code]=`持有滿${cfg.maxHold}天`;
     }
     // 5) 收盤：選股
     pBuys=scan(bars);
-    snaps.push({date,equity:equity(),cash,bench:lastBench,nTrades:trades.length,
+    snaps.push({date,equity:equity(),cash,bench:lastBench,mkt:mkt(),nTrades:trades.length,
       pos:Object.values(pos).map(p=>({...p,price:last[p.code]})),pBuys:pBuys.map(o=>({...o})),pSells:{...pSells}});
   }
   const firstB=snaps.find(s=>s.bench!=null)?.bench;
@@ -469,6 +536,12 @@ function stats(k){
     ret:sn[k].equity/cap-1, bret:sn[k].bench/RES.benchBase-1};
 }
 
+function mktText(m){
+  if(!m||!m.on) return "大盤濾網：關閉";
+  if(!(m.ma>0)) return "大盤濾網：資料不足";
+  return m.ok?`大盤濾網 ✅ 0050（${nf(m.bench,2)}）在 60 日均線（${nf(m.ma,2)}）之上，可以買進`
+             :`大盤濾網 ⛔ 0050（${nf(m.bench,2)}）跌破 60 日均線（${nf(m.ma,2)}），暫停新買進`;
+}
 function renderHome(k){
   const s=RES.snaps[k], cap=RES.cfg.capital, st=stats(k), gain=s.equity-cap;
   $("#lbl").textContent=MODE==="track"?`${s.date} 收盤總資產（${RES.startDate} 起算）`:`${s.date} 收盤總資產`;
@@ -476,6 +549,7 @@ function renderHome(k){
   $("#chg").innerHTML=`<span class="${cls(gain)}">${sg(gain)}${nf(gain)}（${pct(st.ret)}）</span>`;
   const diff=st.ret-st.bret;
   $("#vs").innerHTML=`同期 0050 ${pct(st.bret)}，代理人<span class="${cls(diff)}">${diff>=0?"領先":"落後"} ${Math.abs(diff*100).toFixed(2)}%</span>`;
+  $("#mkt").textContent=mktText(s.mkt);
   $("#stats").innerHTML=[[pct(st.mdd),"最大回撤","fall"],[st.win==null?"—":(st.win*100).toFixed(1)+"%","勝率",""],
     [k>=19?st.sharpe.toFixed(2):"—","夏普值",""],[st.sells.length+" 筆","完成交易",""]]
     .map(([v,l,c])=>`<div><b class="${c}">${v}</b><span>${l}</span></div>`).join("");
@@ -490,7 +564,7 @@ function renderHome(k){
   const sells=Object.entries(s.pSells);
   $("#next").innerHTML=(sells.length||s.pBuys.length)?
     sells.map(([c,r])=>`<div class="order"><span class="act plan sell">賣</span><div><div class="t">${esc(nm(c))}</div><div class="r">${esc(r)}</div></div></div>`).join("")+
-    s.pBuys.map(o=>`<div class="order"><span class="act plan buy">買</span><div><div class="t">${esc(nm(o.code))}</div><div class="r">${o.score}/5 分：${esc(o.reasons.join("、"))}</div></div></div>`).join("")
+    s.pBuys.map(o=>`<div class="order"><span class="act plan buy">買</span><div><div class="t">${esc(nm(o.code))}</div><div class="r">${o.score}/${N_COND} 分：${esc(o.reasons.join("、"))}</div></div></div>`).join("")
     :`<p class="empty">不動作，繼續觀察。</p>`;
   if(charts.eq){
     const cap100=v=>+(v/cap*100).toFixed(2), b0=RES.benchBase;
@@ -511,7 +585,8 @@ function renderPos(k){
       <div class="pl ${cls(pnl)}">${sg(pnl)}${nf(pnl)}<div style="font-size:12px;font-weight:500">${pct(pr)}</div></div></div>
       <div class="meta"><div>成本<b>${nf(p.entry,2)}</b></div><div>現價<b>${nf(p.price,2)}</b></div><div>停損<b class="fall">${nf(p.stop,2)}</b></div></div>
       <div class="bar"><i style="width:${Math.min(100,p.days/RES.cfg.maxHold*100)}%"></i></div>
-      <div class="why">第 ${p.days}/${RES.cfg.maxHold} 天，${p.entryDate} 進場：${esc(p.reasons.join("、"))}</div></div>`;
+      <div class="why">第 ${p.days}/${RES.cfg.maxHold} 天，${p.entryDate} 進場：${esc(p.reasons.join("、"))}${p.be?"　<b class='rise'>已保本</b>":""}<br>
+      失效條件：盤中跌破 ${nf(p.stop,2)}，或收盤跌破 EMA${RES.cfg.exitEma}（${nf(p.exitLine,2)}）</div></div>`;
   }).join(""):`<p class="empty">這天空手，等代理人找到符合條件的股票。</p>`);
   const tl=$("#to-latest"); if(tl) tl.onclick=()=>{setPlaying(false);K=RES.snaps.length-1;render()};
 }
@@ -532,8 +607,19 @@ function renderAna(k){
   if(charts.m){charts.m.data.labels=keys.map(m=>m.slice(2).replace("-","/"));charts.m.data.datasets[0].data=mret;
     charts.m.data.datasets[0].backgroundColor=mret.map(v=>v>=0?css("--rise"):css("--fall"));charts.m.update("none")}
   if(charts.dd){charts.dd.data.labels=sn.map(s=>s.date);charts.dd.data.datasets[0].data=dd;charts.dd.update("none")}
-  const byR={}, byS={};
-  st.sells.forEach(t=>{(byR[t.reason]??={v:0,n:0}).v+=t.pnl;byR[t.reason].n++;byS[t.code]=(byS[t.code]||0)+t.pnl});
+  const byR={}, byS={}, byG={};
+  st.sells.forEach(t=>{(byR[t.reason]??={v:0,n:0}).v+=t.pnl;byR[t.reason].n++;byS[t.code]=(byS[t.code]||0)+t.pnl;
+    const g=SECTOR[t.code]||"其他";(byG[g]??={v:0,n:0}).v+=t.pnl;byG[g].n++});
+  const n=st.sells.length, wins=st.sells.filter(t=>t.pnl>0), loss=st.sells.filter(t=>t.pnl<=0);
+  const sw=wins.reduce((a,t)=>a+t.pnl,0), sl=-loss.reduce((a,t)=>a+t.pnl,0);
+  const avgW=wins.length?sw/wins.length:0, avgL=loss.length?sl/loss.length:0;
+  $("#tstats").innerHTML=[[n+" 筆","樣本數"],[n?sg(sw-sl)+nf((sw-sl)/n):"—","平均每筆損益（期望值）"],
+    [avgL?(avgW/avgL).toFixed(2):"—","盈虧比（均賺÷均賠）"],[sl?(sw/sl).toFixed(2):"—","獲利因子（總賺÷總賠）"],
+    [n?(st.sells.reduce((a,t)=>a+t.days,0)/n).toFixed(1)+" 天":"—","平均持有"],[st.win==null?"—":(st.win*100).toFixed(1)+"%","勝率"]]
+    .map(([v,l])=>`<div><b>${v}</b><span>${l}</span></div>`).join("");
+  $("#tnote").textContent=n<30?`目前只有 ${n} 筆交易，樣本少於 30 筆，統計結果參考就好，不能下定論。`
+    :`獲利因子大於 1 代表賺的比賠的多；期望值為正代表長期平均每筆是賺錢的。回測結果不代表未來。`;
+  $("#sectors").innerHTML=n?hbars(Object.entries(byG).map(([k,o])=>({label:k,v:o.v,sub:o.n+" 筆"})).sort((a,b)=>b.v-a.v)):`<p class="empty">還沒有完成的交易。</p>`;
   $("#reasons").innerHTML=st.sells.length?hbars(Object.entries(byR).map(([k,o])=>({label:k,v:o.v,sub:o.n+" 筆"})).sort((a,b)=>b.v-a.v)):`<p class="empty">還沒有完成的交易。</p>`;
   $("#stocks").innerHTML=st.sells.length?hbars(Object.entries(byS).map(([c,v])=>({label:nm(c),v})).sort((a,b)=>b.v-a.v)):`<p class="empty">還沒有完成的交易。</p>`;
 }
@@ -557,21 +643,26 @@ function renderEmpty(){
   $("#eq").textContent=nf(cap);
   $("#chg").innerHTML=`<span class="muted">尚未開始</span>`;
   $("#vs").textContent=`${sd} 收盤（14:30）後會出現第一天的績效`;
+  $("#mkt").textContent=mktText(RES.pre&&RES.pre.mkt);
   $("#stats").innerHTML=[["—","最大回撤"],["—","勝率"],["—","夏普值"],["0 筆","完成交易"]].map(([v,l])=>`<div><b>${v}</b><span>${l}</span></div>`).join("");
   $("#today-d").textContent=""; $("#today").innerHTML=`<p class="empty">還沒有交易日。</p>`;
-  $("#next").innerHTML=pb.length?pb.map(o=>`<div class="order"><span class="act plan buy">買</span><div><div class="t">${esc(nm(o.code))}</div><div class="r">${o.score}/5 分：${esc(o.reasons.join("、"))}</div></div></div>`).join(""):`<p class="empty">不動作，繼續觀察。</p>`;
+  $("#next").innerHTML=pb.length?pb.map(o=>`<div class="order"><span class="act plan buy">買</span><div><div class="t">${esc(nm(o.code))}</div><div class="r">${o.score}/${N_COND} 分：${esc(o.reasons.join("、"))}</div></div></div>`).join(""):`<p class="empty">不動作，繼續觀察。</p>`;
   $("#cash").textContent=`現金 NT$${nf(cap)}`;
   $("#pos").innerHTML=`<p class="empty">還沒開始交易，目前全部是現金。</p>`;
-  $("#reasons").innerHTML=$("#stocks").innerHTML=`<p class="empty">還沒有完成的交易。</p>`;
+  $("#reasons").innerHTML=$("#stocks").innerHTML=$("#sectors").innerHTML=`<p class="empty">還沒有完成的交易。</p>`;
+  $("#tstats").innerHTML=""; $("#tnote").textContent="";
   $("#log").innerHTML=`<p class="empty">還沒有交易紀錄。</p>`;
 }
+const DESK=matchMedia("(min-width:1000px)");
+DESK.addEventListener("change",()=>{render();Object.values(charts).forEach(c=>c.resize())});
 function render(){
   if(!RES) return;
   const empty=!RES.snaps.length;
   $("#c-eq").parentElement.style.display=empty?"none":""; document.querySelector(".legend").style.display=empty?"none":"";
   if(empty){renderEmpty();return;}
   $("#slider").value=K;
-  ({home:renderHome,pos:renderPos,ana:renderAna,log:renderLog})[TAB](K);
+  const R={home:renderHome,pos:renderPos,ana:renderAna,log:renderLog};
+  if(DESK.matches) Object.values(R).forEach(f=>f(K)); else R[TAB](K);
 }
 
 function buildCharts(){
@@ -621,11 +712,13 @@ $$(".chips button").forEach(b=>b.onclick=()=>{
 });
 
 /* ================= 設定 ================= */
-const FIELDS=["capital","maxPos","risk","atrMult","maxHold","minScore","discount","minLots"];
-const PFIELDS=["maxPos","risk","atrMult","maxHold","minScore","minLots"];
+const FIELDS=["capital","maxPos","risk","atrMult","maxHold","minScore","discount","minLots","maxPerSector"];
+const PFIELDS=["maxPos","risk","atrMult","maxHold","minScore","minLots","maxPerSector"];
+const TOGGLES=["mktFilter","longFilter","breakeven"];
 function openSheet(){
   setPlaying(false);
   $("#f-src").value=SRC; $("#f-years").value=YEARS;
+  TOGGLES.forEach(t=>$("#f-"+t).value=String(CFG[t]??1));
   $("#f-mode").value=MODE; $("#f-start").value=START_DATE; toggleMode();
   $("#f-uni").value=UNI; $("#f-style").value=STYLE; $("#f-exitEma").value=CFG.exitEma;
   FIELDS.forEach(f=>$("#f-"+f).value=CFG[f]);
@@ -635,8 +728,8 @@ $("#open-set").onclick=openSheet;
 function toggleMode(){const t=$("#f-mode").value==="track";$("#start-row").style.display=t?"":"none";$("#years-row").style.display=t?"none":""}
 $("#f-mode").onchange=toggleMode;
 $("#f-style").onchange=e=>{const p=PRESETS[e.target.value]; if(!p) return;
-  PFIELDS.forEach(f=>$("#f-"+f).value=p[f]); $("#f-exitEma").value=p.exitEma;};
-[...PFIELDS,"exitEma"].forEach(f=>$("#f-"+f).addEventListener("input",()=>$("#f-style").value="custom"));
+  PFIELDS.forEach(f=>$("#f-"+f).value=p[f]); $("#f-exitEma").value=p.exitEma; TOGGLES.forEach(t=>$("#f-"+t).value=String(p[t]));};
+[...PFIELDS,"exitEma",...TOGGLES].forEach(f=>$("#f-"+f).addEventListener("input",()=>$("#f-style").value="custom"));
 $("#close-set").onclick=()=>$("#sheet").classList.remove("on");
 $("#sheet").onclick=e=>{if(e.target.id==="sheet")$("#sheet").classList.remove("on")};
 $("#apply").onclick=()=>{
@@ -645,8 +738,9 @@ $("#apply").onclick=()=>{
   MODE=$("#f-mode").value; START_DATE=$("#f-start").value||DEFAULT_START;
   SRC=$("#f-src").value; YEARS=+$("#f-years").value;
   UNI=$("#f-uni").value; UNIVERSE=UNIVERSES[UNI]; STYLE=$("#f-style").value; CFG.exitEma=+$("#f-exitEma").value;
-  FIELDS.forEach(f=>{const v=parseFloat($("#f-"+f).value);if(!isNaN(v)&&(v>0||f==="minLots"))CFG[f]=["maxPos","maxHold","minScore"].includes(f)?Math.round(v):v});
-  CFG.minScore=Math.min(5,CFG.minScore);
+  FIELDS.forEach(f=>{const v=parseFloat($("#f-"+f).value);if(!isNaN(v)&&(v>0||f==="minLots"))CFG[f]=["maxPos","maxHold","minScore","maxPerSector"].includes(f)?Math.round(v):v});
+  TOGGLES.forEach(t=>CFG[t]=+$("#f-"+t).value);
+  CFG.minScore=Math.min(N_COND,CFG.minScore);
   $("#sheet").classList.remove("on");
   start(needFetch);
 };
@@ -661,6 +755,7 @@ async function loadSettings(){
     MODE=o.MODE||MODE; START_DATE=o.START_DATE||START_DATE; YEARS=o.YEARS||YEARS;
     UNI=o.UNI||UNI; UNIVERSE=UNIVERSES[UNI]||UNIVERSE; STYLE=o.STYLE||STYLE; SRC=o.SRC==="demo"?"demo":"real";
     CFG={...CFG,...(o.CFG||{})};
+    if(CFG.maxPerSector==null){ const p=PRESETS[STYLE]||PRESETS.aggressive; ["maxPerSector","mktFilter","longFilter","breakeven","minScore"].forEach(k=>CFG[k]=p[k]); }
   }catch(e){}
 }
 async function saveSettings(){
