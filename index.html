@@ -128,6 +128,12 @@ nav button[aria-selected=true]{color:var(--agent);font-weight:700}
 .primary{display:block;width:100%;margin-top:16px;padding:14px;border:0;border-radius:12px;background:var(--agent);color:#fff;font-size:16px;font-weight:700}
 .sec-title{font-size:13px;color:var(--muted);margin:18px 0 0}
 
+.sheet.tv{max-width:900px}
+#tv-box{height:62vh;min-height:360px;border-radius:12px;overflow:hidden;background:var(--surface)}
+#tv-box .tradingview-widget-container{height:100%}
+a.tv-open{text-align:center;text-decoration:none}
+[data-code]{cursor:pointer}
+.tvhint{font-size:12px;color:var(--muted);font-weight:400}
 .loading{position:fixed;inset:0;background:var(--paper);z-index:30;display:none;place-items:center;text-align:center}
 .loading.on{display:grid}
 .loading p{font-size:15px;color:var(--muted);margin-top:14px}
@@ -187,12 +193,15 @@ nav button[aria-selected=true]{color:var(--agent);font-weight:700}
     <div class="stats" id="stats"></div>
     <h2>這天的成交 <span class="muted" id="today-d"></span></h2>
     <div id="today"></div>
-    <h2>下個開盤 <span class="muted">代理人已決定</span></h2>
+    <h2>觀察名單 Top 5 <span class="muted" id="watch-d"></span></h2>
+    <div id="watch"></div>
+    <h2>下個開盤 <span class="muted">代理人已決定，可照著到 TradingView 下模擬單</span></h2>
     <div id="next"></div>
   </section>
 
   <section class="tab" id="t-pos">
     <h2>持倉 <span class="muted" id="cash"></span></h2>
+    <p class="tvhint">點任一檔股票，可以看 TradingView K 線圖</p>
     <div id="pos"></div>
   </section>
 
@@ -275,6 +284,15 @@ nav button[aria-selected=true]{color:var(--agent);font-weight:700}
   <label class="field"><span>手續費折扣<small>例：0.28 代表 2.8 折</small></span><input id="f-discount" type="number" inputmode="decimal" step="0.01" min="0.1" max="1"></label>
   <button class="primary" id="apply">重新執行代理人</button>
   <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。</p>
+</div></div>
+
+<div class="sheet-bg" id="tv-sheet"><div class="sheet tv" role="dialog" aria-label="K 線圖">
+  <div class="grab"></div>
+  <h3><span id="tv-title">K 線圖</span><button class="icon" id="tv-close" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+  <p class="note" id="tv-info"></p>
+  <div id="tv-box"></div>
+  <a class="primary tv-open" id="tv-link" target="_blank" rel="noopener">在 TradingView 開啟完整圖表</a>
+  <p class="note">圖表由 TradingView 提供。如果圖表區顯示無法載入，按上面按鈕到 TradingView 看。</p>
 </div></div>
 
 <div class="loading" id="loading"><div><div class="spin"></div><p id="load-msg">準備中</p></div></div>
@@ -439,7 +457,7 @@ function runAgent(data,cfg,startDate){
       if(pos[code]||s.c[i]<cfg.minPrice||!(s.vm20[i]>=cfg.minLots*1000)||!(s.atr[i]>0)) continue;
       if(cfg.longFilter&&!(s.c[i]>s.ma200[i])) continue;   // 長線趨勢：站上 200 日均線
       const [sc,rs]=score(s,i);
-      if(sc>=cfg.minScore) cands.push({code,score:sc,reasons:rs,dist:cfg.atrMult*s.atr[i],vr:s.v[i]/s.vm5[i]});
+      if(sc>=cfg.minScore) cands.push({code,score:sc,reasons:rs,dist:cfg.atrMult*s.atr[i],vr:s.v[i]/s.vm5[i],px:s.c[i]});
     }
     cands.sort((a,b)=>b.score-a.score||b.vr-a.vr);
     // 同族群最多 maxPerSector 檔，降低持股相關性
@@ -503,7 +521,7 @@ function runAgent(data,cfg,startDate){
   const firstB=snaps.find(s=>s.bench!=null)?.bench;
   snaps.forEach(s=>{if(s.bench==null)s.bench=firstB});
   const benchBase=(pre&&pre.bench)||firstB;
-  return {snaps,trades,cfg,pre,startDate,benchBase};
+  return {snaps,trades,cfg,pre,startDate,benchBase,S};
 }
 
 /* ================= 畫面 ================= */
@@ -542,6 +560,63 @@ function mktText(m){
   return m.ok?`大盤濾網 ✅ 0050（${nf(m.bench,2)}）在 60 日均線（${nf(m.ma,2)}）之上，可以買進`
              :`大盤濾網 ⛔ 0050（${nf(m.bench,2)}）跌破 60 日均線（${nf(m.ma,2)}），暫停新買進`;
 }
+// 算出下個開盤要下的單（股數用昨收估算，跟代理人同一套算法）
+function planOrders(snap,pre){
+  const cfg=RES.cfg, pos=snap?snap.pos:[], pS=snap?snap.pSells:{}, pB=snap?snap.pBuys:(pre?pre.pBuys:[]);
+  let cash=snap?snap.cash:cfg.capital; const eq=snap?snap.equity:cfg.capital;
+  const sells=[], buys=[]; let held=0;
+  for(const p of pos){ if(pS[p.code]){ sells.push({code:p.code,shares:p.shares,reason:pS[p.code]}); cash+=p.shares*p.price*(1-cfg.feeRate-cfg.tax);} else held++; }
+  for(const o of pB){
+    if(held>=cfg.maxPos) break;
+    const px=o.px, sh=Math.floor(Math.min(eq*cfg.risk/100/o.dist, eq/cfg.maxPos/px, (cash-cfg.minFee)/(px*(1+cfg.feeRate))));
+    if(!(sh>=1)) continue;
+    cash-=sh*px*(1+cfg.feeRate); held++;
+    buys.push({code:o.code,shares:sh,px,score:o.score,reasons:o.reasons});
+  }
+  return {sells,buys};
+}
+function renderPlan(pl){
+  if(!pl.sells.length&&!pl.buys.length) return `<p class="empty">不動作，繼續觀察。</p>`;
+  const row=(b,code,main,sub)=>`<div class="order" data-code="${code}"><span class="act plan ${b?"buy":"sell"}">${b?"買":"賣"}</span>
+    <div><div class="t">${esc(nm(code))}</div><div class="r">${sub}</div></div>
+    <div class="amt">${main}<small>${tvSymbol(code)}</small></div></div>`;
+  return pl.sells.map(x=>row(false,x.code,`${nf(x.shares)} 股`,`全部賣出：${esc(x.reason)}`)).join("")
+    +pl.buys.map(x=>row(true,x.code,`${nf(x.shares)} 股`,`約 ${nf(x.px*x.shares)} 元（昨收 ${nf(x.px,2)}）<br>${x.score}/${N_COND} 分：${esc(x.reasons.join("、"))}`)).join("")
+    +`<button class="more" id="copy-plan">複製下單清單</button>`;
+}
+function bindCopy(pl){
+  const b=$("#copy-plan"); if(!b) return;
+  b.onclick=async()=>{
+    const txt=[...pl.sells.map(x=>`賣 ${tvSymbol(x.code)} ${NAMES[x.code]||""} ${x.shares} 股（${x.reason}）`),
+               ...pl.buys.map(x=>`買 ${tvSymbol(x.code)} ${NAMES[x.code]||""} ${x.shares} 股（昨收 ${x.px.toFixed(2)}）`)].join("\n");
+    try{ await navigator.clipboard.writeText(txt); toast("已複製，可以貼到 LINE 或備忘錄"); }
+    catch(e){ prompt("複製下面的文字：",txt); }
+  };
+}
+// 觀察名單：依代理人 6 個條件，列出這天分數最高的 5 檔（只是觀察，不影響交易）
+function watchlist(date,snap){
+  const cfg=RES.cfg, out=[], held=new Set((snap?snap.pos:[]).map(p=>p.code));
+  for(const code in RES.S){
+    const s=RES.S[code], i=s.at.get(date); if(i===undefined) continue;
+    const [sc,rs]=score(s,i);
+    out.push({code,sc,rs,px:s.c[i],chg:i?s.c[i]/s.c[i-1]-1:0,vr:s.v[i]/s.vm5[i],
+      longOK:s.c[i]>s.ma200[i], liq:s.vm20[i]>=cfg.minLots*1000, held:held.has(code)});
+  }
+  out.sort((a,b)=>b.sc-a.sc||b.vr-a.vr);
+  return out.slice(0,5);
+}
+function renderWatch(date,snap,mk){
+  $("#watch-d").textContent=`${date} 收盤`;
+  const w=watchlist(date,snap);
+  $("#watch").innerHTML=w.length?w.map((x,n)=>{
+    const tags=[x.held?"持有中":"", !x.longOK?"未站上200日線":"", !x.liq?"成交量不足":"", (mk&&!mk.ok)?"大盤濾網中":""].filter(Boolean);
+    return `<div class="order" data-code="${x.code}"><span class="act plan ${x.sc>=RES.cfg.minScore?"buy":"sell"}" style="font-size:13px">${n+1}</span>
+      <div><div class="t">${esc(nm(x.code))}　<span class="muted" style="font-size:12px;font-weight:400">${esc(SECTOR[x.code]||"")}</span></div>
+      <div class="r">${esc(x.rs.join("、"))||"沒有符合的條件"}${tags.length?`<br><b style="color:var(--muted)">${tags.join("・")}</b>`:""}</div></div>
+      <div class="amt">${x.sc}/${N_COND} 分<small>${nf(x.px,2)}　<span class="${cls(x.chg)}">${pct(x.chg)}</span></small></div></div>`;
+  }).join("")+`<p class="note">依代理人的 6 個條件排名，只供觀察。分數達 ${RES.cfg.minScore} 分、又通過濾網和族群限制，代理人才會真的買進。</p>`
+  :`<p class="empty">沒有資料。</p>`;
+}
 function renderHome(k){
   const s=RES.snaps[k], cap=RES.cfg.capital, st=stats(k), gain=s.equity-cap;
   $("#lbl").textContent=MODE==="track"?`${s.date} 收盤總資產（${RES.startDate} 起算）`:`${s.date} 收盤總資產`;
@@ -557,15 +632,12 @@ function renderHome(k){
   $("#today-d").textContent=s.date;
   $("#today").innerHTML=today.length?today.map(t=>{
     const b=t.action==="BUY";
-    return `<div class="order"><span class="act ${b?"buy":"sell"}">${b?"買":"賣"}</span>
+    return `<div class="order" data-code="${t.code}"><span class="act ${b?"buy":"sell"}">${b?"買":"賣"}</span>
       <div><div class="t">${esc(nm(t.code))}</div><div class="r">${esc(t.reason)}</div></div>
       <div class="amt ${b?"":cls(t.pnl)}">${b?nf(t.price,2):sg(t.pnl)+nf(t.pnl)}<small>${nf(t.shares)} 股${b?"":"・"+nf(t.price,2)}</small></div></div>`;
   }).join(""):`<p class="empty">這天沒有成交。</p>`;
-  const sells=Object.entries(s.pSells);
-  $("#next").innerHTML=(sells.length||s.pBuys.length)?
-    sells.map(([c,r])=>`<div class="order"><span class="act plan sell">賣</span><div><div class="t">${esc(nm(c))}</div><div class="r">${esc(r)}</div></div></div>`).join("")+
-    s.pBuys.map(o=>`<div class="order"><span class="act plan buy">買</span><div><div class="t">${esc(nm(o.code))}</div><div class="r">${o.score}/${N_COND} 分：${esc(o.reasons.join("、"))}</div></div></div>`).join("")
-    :`<p class="empty">不動作，繼續觀察。</p>`;
+  renderWatch(s.date,s,s.mkt);
+  const pl=planOrders(s); $("#next").innerHTML=renderPlan(pl); bindCopy(pl);
   if(charts.eq){
     const cap100=v=>+(v/cap*100).toFixed(2), b0=RES.benchBase;
     charts.eq.data.datasets[0].data=RES.snaps.map((x,i)=>i<=k?cap100(x.equity):null);
@@ -580,7 +652,7 @@ function renderPos(k){
   $("#cash").textContent=`${latest?"最新 ":""}${s.date}　現金 NT$${nf(s.cash)}`;
   $("#pos").innerHTML=(latest?"":`<button class="more" id="to-latest" style="margin-top:0">這是 ${s.date} 的持股，回到最新一天</button>`)+(s.pos.length?s.pos.map(p=>{
     const pnl=(p.price-p.entry)*p.shares, pr=p.price/p.entry-1;
-    return `<div class="pos ${pnl>=0?"up":"dn"}">
+    return `<div class="pos ${pnl>=0?"up":"dn"}" data-code="${p.code}">
       <div class="row"><div class="nm">${esc(NAMES[p.code]||p.code)}<small>${p.code}・${nf(p.shares)} 股</small></div>
       <div class="pl ${cls(pnl)}">${sg(pnl)}${nf(pnl)}<div style="font-size:12px;font-weight:500">${pct(pr)}</div></div></div>
       <div class="meta"><div>成本<b>${nf(p.entry,2)}</b></div><div>現價<b>${nf(p.price,2)}</b></div><div>停損<b class="fall">${nf(p.stop,2)}</b></div></div>
@@ -630,7 +702,7 @@ function renderLog(k){
     const b=t.action==="BUY";
     const right=b?`<div class="p">${nf(t.price,2)}<small>${nf(t.shares)} 股</small></div>`
       :`<div class="p ${cls(t.pnl)}">${sg(t.pnl)}${nf(t.pnl)}<small>${nf(t.price,2)}・${t.days} 天</small></div>`;
-    return `<div class="tr"><span class="act ${b?"buy":"sell"}">${b?"買":"賣"}</span>
+    return `<div class="tr" data-code="${t.code}"><span class="act ${b?"buy":"sell"}">${b?"買":"賣"}</span>
       <div><div class="t">${esc(nm(t.code))}</div><div class="d">${t.date}　${esc(t.reason)}</div></div>${right}</div>`;
   }).join(""):`<p class="empty">還沒有交易紀錄。</p>`)
   +(rows.length>logShown?`<button class="more" id="more">再看 ${Math.min(40,rows.length-logShown)} 筆</button>`:"");
@@ -646,7 +718,8 @@ function renderEmpty(){
   $("#mkt").textContent=mktText(RES.pre&&RES.pre.mkt);
   $("#stats").innerHTML=[["—","最大回撤"],["—","勝率"],["—","夏普值"],["0 筆","完成交易"]].map(([v,l])=>`<div><b>${v}</b><span>${l}</span></div>`).join("");
   $("#today-d").textContent=""; $("#today").innerHTML=`<p class="empty">還沒有交易日。</p>`;
-  $("#next").innerHTML=pb.length?pb.map(o=>`<div class="order"><span class="act plan buy">買</span><div><div class="t">${esc(nm(o.code))}</div><div class="r">${o.score}/${N_COND} 分：${esc(o.reasons.join("、"))}</div></div></div>`).join(""):`<p class="empty">不動作，繼續觀察。</p>`;
+  if(RES.pre) renderWatch(RES.pre.date,null,RES.pre.mkt); else $("#watch").innerHTML="";
+  const pl=planOrders(null,RES.pre); $("#next").innerHTML=renderPlan(pl); bindCopy(pl);
   $("#cash").textContent=`現金 NT$${nf(cap)}`;
   $("#pos").innerHTML=`<p class="empty">還沒開始交易，目前全部是現金。</p>`;
   $("#reasons").innerHTML=$("#stocks").innerHTML=$("#sectors").innerHTML=`<p class="empty">還沒有完成的交易。</p>`;
@@ -686,6 +759,34 @@ function buildCharts(){
     options:{maintainAspectRatio:false,animation:false,interaction:{mode:"index",intersect:false},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw}%`}}},scales:{x:xs,y:{grid,max:0,ticks:{callback:v=>v+"%"}}}}});
 }
+
+/* ================= TradingView K 線圖 ================= */
+const OTC_CODES=new Set(["3324","6274","3529"]);
+const tvSymbol=c=>(OTC_CODES.has(c)?"TPEX:":"TWSE:")+c;
+function openChart(code){
+  setPlaying(false);
+  const sym=tvSymbol(code), s=RES&&RES.snaps.length?RES.snaps[K]:null, p=s?s.pos.find(x=>x.code===code):null;
+  $("#tv-title").textContent=nm(code);
+  $("#tv-info").innerHTML=p?`代理人持有 ${nf(p.shares)} 股，成本 ${nf(p.entry,2)}，停損 ${nf(p.stop,2)}，收盤跌破 EMA${RES.cfg.exitEma}（${nf(p.exitLine,2)}）會賣出。`:`${esc(SECTOR[code]||"")}　${sym}`;
+  $("#tv-link").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent(sym);
+  const box=$("#tv-box"); box.innerHTML="";
+  const wrap=document.createElement("div"); wrap.className="tradingview-widget-container";
+  const inner=document.createElement("div"); inner.className="tradingview-widget-container__widget"; inner.style.height="100%";
+  wrap.appendChild(inner);
+  const sc=document.createElement("script");
+  sc.src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"; sc.async=true;
+  sc.textContent=JSON.stringify({autosize:true,symbol:sym,interval:"D",timezone:"Asia/Taipei",
+    theme:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light",style:"1",locale:"zh_TW",
+    allow_symbol_change:true,hide_side_toolbar:true,calendar:false,support_host:"https://www.tradingview.com"});
+  wrap.appendChild(sc); box.appendChild(wrap);
+  $("#tv-sheet").classList.add("on");
+}
+document.addEventListener("click",e=>{
+  if(e.target.closest("button")) return;
+  const el=e.target.closest("[data-code]"); if(el) openChart(el.dataset.code);
+});
+$("#tv-close").onclick=()=>{$("#tv-sheet").classList.remove("on");$("#tv-box").innerHTML=""};
+$("#tv-sheet").onclick=e=>{if(e.target.id==="tv-sheet"){$("#tv-sheet").classList.remove("on");$("#tv-box").innerHTML=""}};
 
 /* ================= 重播 ================= */
 const ICON_PLAY='<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>', ICON_PAUSE='<svg viewBox="0 0 16 16"><path d="M3.5 2h3v12h-3zM9.5 2h3v12h-3z"/></svg>';
