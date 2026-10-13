@@ -84,6 +84,9 @@ h2 .muted{font-weight:400;font-size:12px;margin-left:6px}
 .hbar .n{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 
 .chips{display:flex;gap:8px;margin-bottom:10px}
+.agents{display:flex;gap:8px;margin:2px 0 14px}
+.agents button{flex:1;font-size:14px;font-weight:500;padding:8px 0;border-radius:99px;border:1px solid var(--line);background:none}
+.agents button[aria-pressed=true]{background:var(--agent);color:#fff;border-color:var(--agent)}
 .chips button{font-size:13px;padding:6px 14px;border-radius:99px;border:1px solid var(--line);background:none}
 .chips button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .tr{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
@@ -179,6 +182,10 @@ a.tv-open{text-align:center;text-decoration:none}
     <h1>投資代理人<span class="badge" id="src"></span></h1>
     <button class="icon" id="open-set" aria-label="設定"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
   </header>
+  <div class="agents" id="agents" role="group" aria-label="選擇代理人">
+    <button data-agent="momentum" aria-pressed="true">短線動能</button>
+    <button data-agent="cycle" aria-pressed="false">谷底反轉</button>
+  </div>
 
   <section class="tab on" id="t-home">
     <div class="hero">
@@ -255,7 +262,7 @@ a.tv-open{text-align:center;text-decoration:none}
   <h3>設定 <button class="icon" id="close-set" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
   <p class="sec-title">資料</p>
   <label class="field"><span>股票池</span>
-    <select id="f-uni"><option value="tech">科技股 30 檔</option><option value="mixed">權值綜合 30 檔</option></select></label>
+    <select id="f-uni"><option value="tech">科技股 30 檔</option><option value="mixed">權值綜合 30 檔</option><option value="cycle">景氣循環股 21 檔</option></select></label>
   <label class="field"><span>資料來源</span>
     <select id="f-src"><option value="real">真實台股</option><option value="demo">示範資料</option></select></label>
   <label class="field"><span>績效計算</span>
@@ -267,7 +274,7 @@ a.tv-open{text-align:center;text-decoration:none}
 
   <p class="sec-title">策略</p>
   <label class="field"><span>風格<small>切換會套用整組參數</small></span>
-    <select id="f-style"><option value="aggressive">積極</option><option value="conservative">保守</option><option value="custom">自訂</option></select></label>
+    <select id="f-style"><option value="aggressive">積極</option><option value="conservative">保守</option><option value="cycle">谷底反轉</option><option value="custom">自訂</option></select></label>
   <label class="field"><span>本金</span><input id="f-capital" type="number" inputmode="numeric" step="10000" min="10000"></label>
   <label class="field"><span>最多同時持有<small>檔</small></span><input id="f-maxPos" type="number" inputmode="numeric" min="1" max="10"></label>
   <label class="field"><span>每筆最大虧損<small>本金的 %</small></span><input id="f-risk" type="number" inputmode="decimal" step="0.5" min="0.5" max="5"></label>
@@ -280,10 +287,12 @@ a.tv-open{text-align:center;text-decoration:none}
   <label class="field"><span>同族群最多<small>檔，避免押在同一產業</small></span><input id="f-maxPerSector" type="number" inputmode="numeric" min="1" max="5"></label>
   <label class="field"><span>大盤濾網<small>0050 跌破 60 日均線就不買</small></span><select id="f-mktFilter"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>長線濾網<small>股價要在 200 日均線之上</small></span><select id="f-longFilter"><option value="1">開</option><option value="0">關</option></select></label>
+  <label class="field"><span>循環濾網<small>營收年增率連 2 月轉正才買</small></span><select id="f-cycleFilter"><option value="1">開</option><option value="0">關</option></select></label>
+  <label class="field"><span>距高點跌幅<small>%，股價要比近 2 年高點低這麼多</small></span><input id="f-ddMin" type="number" inputmode="numeric" step="5" min="0" max="90"></label>
   <label class="field"><span>保本停損<small>賺到 1.5 倍風險後停損移到成本</small></span><select id="f-breakeven"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>手續費折扣<small>例：0.28 代表 2.8 折</small></span><input id="f-discount" type="number" inputmode="decimal" step="0.01" min="0.1" max="1"></label>
   <button class="primary" id="apply">重新執行代理人</button>
-  <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。</p>
+  <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。<br>谷底反轉風格（建議搭配景氣循環股）：先過循環濾網，最近 2 個月營收年增率都轉正、而且股價比近 2 年高點跌超過 50%，再看上面 6 個條件符合 3 個確認止跌；因為是抄底，關掉大盤和長線濾網，最多抱 60 天。營收用次月 11 日之後才算「已知」，回測不會偷看未來。產業報價止跌目前沒有自動資料，請自己另外確認。</p>
 </div></div>
 
 <div class="sheet-bg" id="tv-sheet"><div class="sheet tv" role="dialog" aria-label="K 線圖">
@@ -311,24 +320,36 @@ const UNIVERSES = {
   ["3711","日月光投控"],["2412","中華電"],["1301","台塑"],["2002","中鋼"],["2603","長榮"],
   ["2609","陽明"],["2615","萬海"],["3231","緯創"],["2357","華碩"],["2376","技嘉"],
   ["3037","欣興"],["2345","智邦"],["6669","緯穎"],["3017","奇鋐"],["2379","瑞昱"],
-  ["3008","大立光"],["2395","研華"],["1216","統一"],["2207","和泰車"],["5871","中租-KY"]]};
-const NAMES = Object.fromEntries([...UNIVERSES.tech,...UNIVERSES.mixed]);
-const UNI_LABEL = {tech:"科技股", mixed:"權值綜合"};
+  ["3008","大立光"],["2395","研華"],["1216","統一"],["2207","和泰車"],["5871","中租-KY"]],
+ cycle: [["2408","南亞科"],["2344","華邦電"],["2337","旺宏"],["6770","力積電"],["8299","群聯"],
+  ["2409","友達"],["3481","群創"],["2002","中鋼"],["1301","台塑"],["1303","南亞"],["1326","台化"],
+  ["6505","台塑化"],["2327","國巨"],["2492","華新科"],["1101","台泥"],["1102","亞泥"],
+  ["2603","長榮"],["2609","陽明"],["2615","萬海"],["2606","裕民"],["2637","慧洋-KY"]]};
+const NAMES = Object.fromEntries([...UNIVERSES.tech,...UNIVERSES.mixed,...UNIVERSES.cycle]);
+const UNI_LABEL = {tech:"科技股", mixed:"權值綜合", cycle:"循環股"};
 const SECTOR = {
   "2330":"晶圓代工","2303":"晶圓代工","3711":"封測","2449":"封測",
   "2454":"IC設計","2379":"IC設計","3034":"IC設計","3661":"IC設計","3443":"IC設計","5269":"IC設計","3529":"IC設計","4966":"IC設計",
   "2317":"AI伺服器","2382":"AI伺服器","3231":"AI伺服器","6669":"AI伺服器","2356":"AI伺服器",
   "2376":"電腦板卡","2357":"電腦板卡","2377":"電腦板卡","3017":"散熱","3324":"散熱",
-  "2308":"電源元件","2327":"電源元件","3037":"PCB載板","8046":"PCB載板","3189":"PCB載板","2383":"PCB載板","6274":"PCB載板",
+  "2308":"電源元件","2327":"被動元件","2492":"被動元件","3037":"PCB載板","8046":"PCB載板","3189":"PCB載板","2383":"PCB載板","6274":"PCB載板",
   "2345":"網通","2412":"電信","3008":"光學","2395":"工業電腦",
   "2881":"金融","2882":"金融","2891":"金融","2886":"金融","5871":"金融",
-  "2603":"航運","2609":"航運","2615":"航運","1301":"塑化鋼鐵","2002":"塑化鋼鐵","1216":"食品汽車","2207":"食品汽車"};
+  "2603":"航運","2609":"航運","2615":"航運","1301":"塑化鋼鐵","2002":"塑化鋼鐵","1216":"食品汽車","2207":"食品汽車",
+  "2408":"記憶體","2344":"記憶體","2337":"記憶體","6770":"記憶體","8299":"記憶體","2409":"面板","3481":"面板",
+  "1303":"塑化鋼鐵","1326":"塑化鋼鐵","6505":"塑化鋼鐵","1101":"水泥","1102":"水泥","2606":"散裝航運","2637":"散裝航運"};
 const N_COND = 6;
 const PRESETS = {
-  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1},
-  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1}};
+  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50},
+  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50},
+  // 谷底反轉：營收年增率轉正＋股價離高點夠遠，再用技術面確認止跌（6 選 3）；抄底所以關掉大盤與長線濾網，抱比較久
+  cycle:        {maxPos:4, risk:2,   atrMult:2.5, maxHold:60, minScore:3, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:0, longFilter:0, breakeven:1, cycleFilter:1, ddMin:50}};
+const STYLE_LABEL = {aggressive:"積極", conservative:"保守", cycle:"谷底反轉", custom:"自訂"};
 const DEFAULT_CFG = {capital:100000, discount:1, minFee:1, feeRate:0.001425, tax:0.003, minPrice:10, ...PRESETS.aggressive};
 let UNI="tech", UNIVERSE=UNIVERSES.tech, STYLE="aggressive";
+// 兩個代理人各自保存自己的股票池、風格和參數，切換時互不影響
+const AGENT_DEF = {momentum:{UNI:"tech", STYLE:"aggressive"}, cycle:{UNI:"cycle", STYLE:"cycle"}};
+let AGENT="momentum", PROFILES={};
 
 /* ================= 示範資料（固定亂數種子，每次結果一樣） ================= */
 function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);
@@ -365,6 +386,9 @@ function demoData(){
       s.v.push(Math.round(baseV*(0.6+r()*0.8)*(1+Math.abs(ret)*40+(trend>0.002?0.5:0))));
       p=c;
     }
+    s.rev=[]; // 示範用月營收年增率：大致跟著股價一年漲跌走，加一點雜訊
+    for(let i=250;i<n;i++) if(dates[i].slice(5,7)!==dates[i-1].slice(5,7))
+      s.rev.push([dates[i].slice(0,8)+"11", +(s.c[i-1]/s.c[i-251]-1+gauss(r)*0.08).toFixed(4)]);
     stocks[code]=s;
   });
   let b=55; const bench={dates,c:[]};
@@ -414,8 +438,24 @@ function indicators(s){
   Object.assign(s,{e5:ema(s.c,5),e10:ema(s.c,10),e20:ema(s.c,20),rsi,obv,obvH:rollMax(obv,20),atr,
     hist:macd.map((x,i)=>i<34?NaN:x-sig[i]),ma200:rollMean(s.c,200),
     vm5:rollMean(s.v,5),vm20:rollMean(s.v,20),hi20:[NaN,...hi.slice(0,-1)]});
+  // 循環股訊號：最近 2 個月營收年增率都 > 0，且再往前 4 個月內曾經 ≤ 0（＝剛轉正）
+  const rv=(s.rev||[]).slice().sort((a,b)=>a[0]<b[0]?-1:1);
+  s.revYoY=[]; s.revTurn=[]; s.dd=[];
+  let k=0;
+  for(let i=0;i<n;i++){
+    while(k<rv.length&&rv[k][0]<=s.dates[i]) k++;   // 只用當天以前已公布的營收
+    const y=rv.slice(0,k).map(x=>x[1]);
+    s.revYoY.push(y.length?y[y.length-1]:NaN);
+    s.revTurn.push(y.length>=3&&y[y.length-1]>0&&y[y.length-2]>0&&y.slice(-6,-2).some(v=>v<=0));
+    const hi=Math.max(...s.c.slice(Math.max(0,i-499),i+1));   // 近 2 年（約 500 個交易日）最高收盤
+    s.dd.push(1-s.c[i]/hi);
+  }
   s.at=new Map(s.dates.map((d,i)=>[d,i]));
   return s;
+}
+function cycleOK(s,i,cfg){ return s.revTurn[i]&&s.dd[i]>=cfg.ddMin/100; }
+function cycleTags(s,i){
+  return [`營收年增${isNaN(s.revYoY[i])?"—":sg(s.revYoY[i])+(s.revYoY[i]*100).toFixed(1)+"%"}（連2月轉正）`,`距2年高點 -${(s.dd[i]*100).toFixed(0)}%`];
 }
 function score(s,i){
   const c={
@@ -456,8 +496,9 @@ function runAgent(data,cfg,startDate){
       const s=S[code], i=bars[code];
       if(pos[code]||s.c[i]<cfg.minPrice||!(s.vm20[i]>=cfg.minLots*1000)||!(s.atr[i]>0)) continue;
       if(cfg.longFilter&&!(s.c[i]>s.ma200[i])) continue;   // 長線趨勢：站上 200 日均線
+      if(cfg.cycleFilter&&!cycleOK(s,i,cfg)) continue;     // 谷底反轉：營收剛轉正＋離高點夠遠
       const [sc,rs]=score(s,i);
-      if(sc>=cfg.minScore) cands.push({code,score:sc,reasons:rs,dist:cfg.atrMult*s.atr[i],vr:s.v[i]/s.vm5[i],px:s.c[i]});
+      if(sc>=cfg.minScore) cands.push({code,score:sc,reasons:cfg.cycleFilter?[...cycleTags(s,i),...rs]:rs,dist:cfg.atrMult*s.atr[i],vr:s.v[i]/s.vm5[i],px:s.c[i]});
     }
     cands.sort((a,b)=>b.score-a.score||b.vr-a.vr);
     // 同族群最多 maxPerSector 檔，降低持股相關性
@@ -599,17 +640,19 @@ function watchlist(date,snap){
   for(const code in RES.S){
     const s=RES.S[code], i=s.at.get(date); if(i===undefined) continue;
     const [sc,rs]=score(s,i);
-    out.push({code,sc,rs,px:s.c[i],chg:i?s.c[i]/s.c[i-1]-1:0,vr:s.v[i]/s.vm5[i],
-      longOK:s.c[i]>s.ma200[i], liq:s.vm20[i]>=cfg.minLots*1000, held:held.has(code)});
+    const cyc=cfg.cycleFilter?{turn:!!s.revTurn[i],deep:s.dd[i]>=cfg.ddMin/100,tags:cycleTags(s,i)}:null;
+    out.push({code,sc,rs:cyc?[...cyc.tags,...rs]:rs,px:s.c[i],chg:i?s.c[i]/s.c[i-1]-1:0,vr:s.v[i]/s.vm5[i],cyc,
+      longOK:!cfg.longFilter||s.c[i]>s.ma200[i], liq:s.vm20[i]>=cfg.minLots*1000, held:held.has(code)});
   }
-  out.sort((a,b)=>b.sc-a.sc||b.vr-a.vr);
+  const cy=x=>x.cyc?(x.cyc.turn&&x.cyc.deep?2:x.cyc.turn||x.cyc.deep?1:0):0;
+  out.sort((a,b)=>cy(b)-cy(a)||b.sc-a.sc||b.vr-a.vr);
   return out.slice(0,5);
 }
 function renderWatch(date,snap,mk){
   $("#watch-d").textContent=`${date} 收盤`;
   const w=watchlist(date,snap);
   $("#watch").innerHTML=w.length?w.map((x,n)=>{
-    const tags=[x.held?"持有中":"", !x.longOK?"未站上200日線":"", !x.liq?"成交量不足":"", (mk&&!mk.ok)?"大盤濾網中":""].filter(Boolean);
+    const tags=[x.held?"持有中":"", x.cyc&&!x.cyc.turn?"營收未轉正":"", x.cyc&&!x.cyc.deep?"離高點跌幅不足":"", !x.longOK?"未站上200日線":"", !x.liq?"成交量不足":"", (mk&&!mk.ok)?"大盤濾網中":""].filter(Boolean);
     return `<div class="order" data-code="${x.code}"><span class="act plan ${x.sc>=RES.cfg.minScore?"buy":"sell"}" style="font-size:13px">${n+1}</span>
       <div><div class="t">${esc(nm(x.code))}　<span class="muted" style="font-size:12px;font-weight:400">${esc(SECTOR[x.code]||"")}</span></div>
       <div class="r">${esc(x.rs.join("、"))||"沒有符合的條件"}${tags.length?`<br><b style="color:var(--muted)">${tags.join("・")}</b>`:""}</div></div>
@@ -813,13 +856,13 @@ $$(".chips button").forEach(b=>b.onclick=()=>{
 });
 
 /* ================= 設定 ================= */
-const FIELDS=["capital","maxPos","risk","atrMult","maxHold","minScore","discount","minLots","maxPerSector"];
-const PFIELDS=["maxPos","risk","atrMult","maxHold","minScore","minLots","maxPerSector"];
-const TOGGLES=["mktFilter","longFilter","breakeven"];
+const FIELDS=["capital","maxPos","risk","atrMult","maxHold","minScore","discount","minLots","maxPerSector","ddMin"];
+const PFIELDS=["maxPos","risk","atrMult","maxHold","minScore","minLots","maxPerSector","ddMin"];
+const TOGGLES=["mktFilter","longFilter","breakeven","cycleFilter"];
 function openSheet(){
   setPlaying(false);
   $("#f-src").value=SRC; $("#f-years").value=YEARS;
-  TOGGLES.forEach(t=>$("#f-"+t).value=String(CFG[t]??1));
+  TOGGLES.forEach(t=>$("#f-"+t).value=String(CFG[t]??(t==="cycleFilter"?0:1)));
   $("#f-mode").value=MODE; $("#f-start").value=START_DATE; toggleMode();
   $("#f-uni").value=UNI; $("#f-style").value=STYLE; $("#f-exitEma").value=CFG.exitEma;
   FIELDS.forEach(f=>$("#f-"+f).value=CFG[f]);
@@ -839,28 +882,53 @@ $("#apply").onclick=()=>{
   MODE=$("#f-mode").value; START_DATE=$("#f-start").value||DEFAULT_START;
   SRC=$("#f-src").value; YEARS=+$("#f-years").value;
   UNI=$("#f-uni").value; UNIVERSE=UNIVERSES[UNI]; STYLE=$("#f-style").value; CFG.exitEma=+$("#f-exitEma").value;
-  FIELDS.forEach(f=>{const v=parseFloat($("#f-"+f).value);if(!isNaN(v)&&(v>0||f==="minLots"))CFG[f]=["maxPos","maxHold","minScore","maxPerSector"].includes(f)?Math.round(v):v});
+  FIELDS.forEach(f=>{const v=parseFloat($("#f-"+f).value);if(!isNaN(v)&&(v>0||f==="minLots"||f==="ddMin"))CFG[f]=["maxPos","maxHold","minScore","maxPerSector"].includes(f)?Math.round(v):v});
   TOGGLES.forEach(t=>CFG[t]=+$("#f-"+t).value);
   CFG.minScore=Math.min(N_COND,CFG.minScore);
   $("#sheet").classList.remove("on");
   start(needFetch);
 };
 
+/* ================= 兩個代理人 ================= */
+function profileDefault(a){ const d=AGENT_DEF[a]; return {UNI:d.UNI, STYLE:d.STYLE, CFG:{...DEFAULT_CFG,...PRESETS[d.STYLE]}}; }
+function stash(){ PROFILES[AGENT]={UNI, STYLE, CFG:{...CFG}}; }
+function applyProfile(a){
+  AGENT=AGENT_DEF[a]?a:"momentum";
+  const p=PROFILES[AGENT]||profileDefault(AGENT);
+  UNI=UNIVERSES[p.UNI]?p.UNI:AGENT_DEF[AGENT].UNI; UNIVERSE=UNIVERSES[UNI]; STYLE=p.STYLE;
+  CFG={...DEFAULT_CFG,...p.CFG};
+  $$("#agents button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.agent===AGENT));
+}
+$$("#agents button").forEach(b=>b.onclick=()=>{
+  if(b.dataset.agent===AGENT) return;
+  setPlaying(false); stash(); applyProfile(b.dataset.agent); start(true);
+});
+
 /* ================= 記住設定（發佈後可用） ================= */
+// GitHub Pages 上沒有 window.storage，改用瀏覽器的 localStorage 記住設定
+const STORE=window.storage||{
+  get:async k=>{ try{ const v=localStorage.getItem(k); return v==null?null:{value:v}; }catch(e){ return null; } },
+  set:async (k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} }};
 async function loadSettings(){
   try{
-    if(!window.storage) return;
-    const r=await window.storage.get("agent-settings",false);
+    const r=await STORE.get("agent-settings",false);
     if(!r||!r.value) return;
     const o=JSON.parse(r.value);
-    MODE=o.MODE||MODE; START_DATE=o.START_DATE||START_DATE; YEARS=o.YEARS||YEARS;
-    UNI=o.UNI||UNI; UNIVERSE=UNIVERSES[UNI]||UNIVERSE; STYLE=o.STYLE||STYLE; SRC=o.SRC==="demo"?"demo":"real";
-    CFG={...CFG,...(o.CFG||{})};
-    if(CFG.maxPerSector==null){ const p=PRESETS[STYLE]||PRESETS.aggressive; ["maxPerSector","mktFilter","longFilter","breakeven","minScore"].forEach(k=>CFG[k]=p[k]); }
+    MODE=o.MODE||MODE; START_DATE=o.START_DATE||START_DATE; YEARS=o.YEARS||YEARS; SRC=o.SRC==="demo"?"demo":"real";
+    if(o.PROFILES) PROFILES=o.PROFILES;
+    else if(o.CFG) PROFILES.momentum={UNI:o.UNI||"tech", STYLE:o.STYLE||"aggressive", CFG:o.CFG};  // 舊版設定 → 原本的短線動能代理人
+    for(const a in PROFILES){
+      const c={...DEFAULT_CFG,...(PROFILES[a].CFG||{})}, st=PROFILES[a].STYLE;
+      if((PROFILES[a].CFG||{}).maxPerSector==null){ const p=PRESETS[st]||PRESETS.aggressive; ["maxPerSector","mktFilter","longFilter","breakeven","minScore"].forEach(k=>c[k]=p[k]); }
+      if((PROFILES[a].CFG||{}).cycleFilter==null){ const p=PRESETS[st]||PRESETS.aggressive; c.cycleFilter=p.cycleFilter; c.ddMin=p.ddMin; }
+      PROFILES[a].CFG=c;
+    }
+    AGENT=o.AGENT||"momentum";
   }catch(e){}
 }
 async function saveSettings(){
-  try{ if(window.storage) await window.storage.set("agent-settings",JSON.stringify({MODE,START_DATE,YEARS,UNI,STYLE,SRC,CFG}),false); }catch(e){}
+  stash();
+  try{ await STORE.set("agent-settings",JSON.stringify({MODE,START_DATE,YEARS,SRC,AGENT,PROFILES}),false); }catch(e){}
 }
 
 /* ================= 啟動 ================= */
@@ -883,7 +951,9 @@ async function start(refetch=true){
   }
   $("#load-msg").textContent="代理人交易中"; await new Promise(r=>setTimeout(r,30));
   RES=runAgent(DATA,{...CFG},sd);
-  $("#src").textContent=`${UNI_LABEL[UNI]}｜${{aggressive:"積極",conservative:"保守",custom:"自訂"}[STYLE]}｜${DATA.source==="real"?"真實":"示範"}`;
+  $("#src").textContent=`${UNI_LABEL[UNI]}｜${STYLE_LABEL[STYLE]||"自訂"}｜${DATA.source==="real"?"真實":"示範"}`;
+  if(CFG.cycleFilter&&!Object.values(DATA.stocks).some(s=>s.rev&&s.rev.length))
+    toast("還沒有月營收資料，循環濾網會擋掉所有股票。等 GitHub 下次自動更新後就會有。");
   $("#upd").innerHTML=DATA.source==="real"?`股價更新於 ${esc(DATA.updated)}<br>`:"";
   K=Math.max(RES.snaps.length-1,0);
   $("#slider").max=K;
@@ -893,7 +963,7 @@ async function start(refetch=true){
   L.classList.remove("on");
   saveSettings();
 }
-loadSettings().then(()=>start());
+loadSettings().then(()=>{ applyProfile(AGENT); start(); });
 </script>
 </body>
 </html>
