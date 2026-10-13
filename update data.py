@@ -197,6 +197,39 @@ def macro():
 ACTIVE_N = 100  # 主動選股：全市場成交值前幾名
 
 
+def previous_data():
+    """讀取網站上一次發佈的 data.json；這次抓不到的資料（額度用完、網路錯誤）就沿用上次的。"""
+    repo = os.environ.get("GITHUB_REPOSITORY", "yaze01112/Invest-agent")
+    owner, name = repo.split("/", 1)
+    url = f"https://{owner.lower()}.github.io/{name}/data.json?t={int(time.time())}"
+    try:
+        with urllib.request.urlopen(url, timeout=60) as r:
+            d = json.load(r)
+        print(f"讀到上次的資料：{len(d.get('stocks', {}))} 檔")
+        return d
+    except Exception as e:
+        print(f"讀不到上次的資料：{e}")
+        return {}
+
+
+def fill_from_previous(stocks, prev):
+    """這次沒抓到的月營收、淨值比、融資、法人，用上次的資料依日期補上。"""
+    ps, n = prev.get("stocks", {}), 0
+    for c, s in stocks.items():
+        old = ps.get(c)
+        if not old:
+            continue
+        if not s.get("rev") and old.get("rev"):
+            s["rev"] = old["rev"]; n += 1
+        if "pbr" not in s and old.get("pbr"):
+            pos = {d: i for i, d in enumerate(old.get("dates", []))}
+            for k in ("pbr", "mu", "fi", "it"):
+                if old.get(k):
+                    s[k] = [old[k][pos[d]] if d in pos and pos[d] < len(old[k]) else None for d in s["dates"]]
+    if n:
+        print(f"沿用上次的月營收：{n} 檔")
+
+
 def market_list():
     """FinMind 台股總覽：代號、名稱、產業、上市或上櫃（只要 1 次請求）。只留 4 位數普通股，排除 ETF。"""
     info = {}
@@ -225,6 +258,7 @@ def pick_active(info, n=ACTIVE_N):
 
 
 def main():
+    prev = previous_data()
     info, active = {}, []
     try:
         info = market_list()
@@ -233,7 +267,11 @@ def main():
                 OTC.add(c)
         active = pick_active(info)
     except Exception as e:
-        print(f"主動選股失敗，只用固定名單：{e}")
+        print(f"主動選股失敗：{e}")
+    if not active and prev.get("active"):  # 這次選不出來就沿用上次的名單
+        active = prev["active"]
+        info = {c: dict(name=prev.get("names", {}).get(c, c), sector=prev.get("sectors", {}).get(c, ""), otc=False) for c in prev.get("names", {})}
+        print(f"沿用上次的主動選股名單：{len(active)} 檔")
     fixed = sorted(set(TECH + MIXED + CYCLE))
     codes = sorted(set(fixed + active)) + [BENCH]
     got = download([sym(c) for c in codes])
@@ -248,6 +286,7 @@ def main():
         sys.exit(f"下載失敗，只拿到 {len(stocks)} 檔，不更新 data.json")
     bench = stocks.pop(BENCH)
     status = add_finmind(stocks)
+    fill_from_previous(stocks, prev)
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
     names = {c: info[c]["name"] for c in stocks if c in info}
     sectors = {c: info[c]["sector"] for c in stocks if c in info and info[c]["sector"]}
