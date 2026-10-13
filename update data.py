@@ -138,15 +138,27 @@ def daily_fields(code, start):
     return out
 
 
-def add_finmind(stocks):
+def latest_rev_date(today):
+    """最近一次「已公布」月營收的可用日期：每月 11 日起才算上個月營收已公布。"""
+    y, m = (today.year, today.month) if today.day >= 11 else ((today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12))
+    return f"{y}-{m:02d}-11"
+
+
+def add_finmind(stocks, prev=None):
     today = dt.date.today()
     rstart = (today - dt.timedelta(days=365 * 4 + 40)).isoformat()
     dstart = (today - dt.timedelta(days=365 * 3 + 10)).isoformat()
-    ok = dict(rev=0, daily=0)
+    ok = dict(rev=0, daily=0, rev_cached=0)
     stop = set()
+    need = latest_rev_date(today)
+    prev_st = (prev or {}).get("stocks", {})
     last_err = ""
     for code, s in stocks.items():
-        if "rev" not in stop:
+        old_rev = (prev_st.get(code) or {}).get("rev")
+        if old_rev and old_rev[-1][0] >= need:  # 這個月的營收已經抓過，沿用就好，省額度
+            s["rev"] = old_rev
+            ok["rev"] += 1; ok["rev_cached"] += 1
+        elif "rev" not in stop:
             try:
                 r = month_revenue(code, rstart)
                 if r:
@@ -171,9 +183,9 @@ def add_finmind(stocks):
                 last_err = f"淨值比等 {code}: {e}"
                 print(f"{code} 淨值比／融資／法人下載失敗：{e}")
             time.sleep(0.3)
-    print(f"月營收：{ok['rev']}/{len(stocks)} 檔，淨值比／融資／法人：{ok['daily']}/{len(stocks)} 檔")
+    print(f"月營收：{ok['rev']}/{len(stocks)} 檔（沿用 {ok['rev_cached']} 檔），淨值比／融資／法人：{ok['daily']}/{len(stocks)} 檔")
     # 更新狀態（不含 token 本身），放在 data.json 最前面方便檢查
-    return dict(token=bool(TOKEN["value"]), token_ok=TOKEN["ok"], token_error=TOKEN["error"], rev=ok["rev"],
+    return dict(token=bool(TOKEN["value"]), token_ok=TOKEN["ok"], token_error=TOKEN["error"], rev=ok["rev"], rev_cached=ok["rev_cached"],
                 daily=ok["daily"], total=len(stocks), limit_hit=sorted(stop), error=last_err[:120])
 
 
@@ -285,7 +297,7 @@ def main():
     if BENCH not in stocks or len(stocks) < 20:
         sys.exit(f"下載失敗，只拿到 {len(stocks)} 檔，不更新 data.json")
     bench = stocks.pop(BENCH)
-    status = add_finmind(stocks)
+    status = add_finmind(stocks, prev)
     fill_from_previous(stocks, prev)
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
     names = {c: info[c]["name"] for c in stocks if c in info}
