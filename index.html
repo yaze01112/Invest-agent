@@ -139,13 +139,12 @@ h2 span,h2 .muted{font-size:13px;font-weight:400;color:var(--muted)}
 .pos .sub{font-size:12.5px;color:var(--muted);font-family:var(--f-text)}
 .pos .pl{text-align:right;font-size:17px;font-weight:700;white-space:nowrap}
 .pos .pl small{display:block;font-size:12px;font-weight:500}
-.ladder{position:relative;height:22px;margin:16px 6px 0}
-.ladder .rail{position:absolute;left:0;right:0;top:10px;height:2px;background:var(--line);border-radius:2px}
-.ladder .seg{position:absolute;top:10px;height:2px;border-radius:2px}
-.ladder .m{position:absolute;top:5px;width:12px;height:12px;margin-left:-6px;border-radius:50%;border:2px solid var(--bg)}
-.ladder .m.stop{background:var(--fall)} .ladder .m.cost{background:var(--faint)} .ladder .m.now{width:14px;height:14px;top:4px;margin-left:-7px}
-.ladder-l{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:2px 0 0;font-family:var(--f-text)}
-.ladder-l b{font-family:var(--f-num);font-weight:600;color:var(--ink);margin-left:4px}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.kv div{min-width:0}
+.kv span{display:block;font-family:var(--f-text);font-size:12px;color:var(--muted)}
+.kv b{display:block;font-size:16px;font-weight:600}
+.kv small{display:block;font-family:var(--f-text);font-size:11.5px;color:var(--muted)}
+.pos.etf .nm{font-size:15px} .pos.etf .pl{font-size:15px}
 .hold{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12px;color:var(--muted);font-family:var(--f-text)}
 .hold .bar{flex:1;height:3px;border-radius:2px;background:var(--line);position:relative;overflow:hidden}
 .hold .bar i{position:absolute;inset:0 auto 0 0;background:var(--ink);border-radius:2px}
@@ -980,27 +979,27 @@ function renderPos(k){
   const s=RES.snaps[k];
   const latest=k===RES.snaps.length-1;
   $("#cash").textContent=`${s.date}${latest?"（最新）":""}　現金 NT$${nf(s.cash)}${s.etfVal>0?`　0050 停泊 NT$${nf(s.etfVal)}`:""}`;
+  const etfRow=s.etfVal>0?`<div class="pos etf"><div class="pos-top">
+      <div><div class="nm">元大台灣50<small>0050</small></div><div class="sub">沒有買進訊號時，閒置現金先停在這裡，有新買單會先賣掉</div></div>
+      <div class="pl">NT$${nf(s.etfVal)}<small class="muted">占總資產 ${(s.etfVal/s.equity*100).toFixed(0)}%</small></div></div></div>`:"";
   $("#pos").innerHTML=(latest?"":`<button class="more" id="to-latest" style="margin-top:0">這是 ${s.date} 的持股，回到最新一天</button>`)+(s.pos.length?s.pos.map(p=>{
-    const pnl=(p.price-p.entry)*p.shares, pr=p.price/p.entry-1;
-    // 價格尺：停損 → 成本 → 現價 畫在同一條線上，一眼看出離停損還有多遠
-    const lo=Math.min(p.stop,p.entry,p.price), hi=Math.max(p.stop,p.entry,p.price), span=(hi-lo)||1;
-    const at=v=>((v-lo)/span*100).toFixed(1), col=pnl>=0?"var(--rise)":"var(--fall)";
-    const a=Math.min(+at(p.entry),+at(p.price)), w=Math.abs(at(p.price)-at(p.entry));
+    const pnl=(p.price-p.entry)*p.shares, pr=p.price/p.entry-1, room=p.price/p.stop-1, lock=(p.stop-p.entry)*p.shares;
     return `<div class="pos" data-code="${p.code}">
       <div class="pos-top">
         <div><div class="nm">${esc(NAMES[p.code]||p.code)}<small>${p.code}</small>${p.be?`<em class="be">已保本</em>`:""}</div>
-          <div class="sub">${nf(p.shares)} 股，${p.entryDate} 進場</div></div>
+          <div class="sub">${nf(p.shares)} 股，市值 NT$${nf(p.price*p.shares)}，${p.entryDate} 進場</div></div>
         ${spark(p.code,s.date,Math.max(p.days+10,20),p.entry)}
         <div class="pl ${cls(pnl)}">${sg(pnl)}${nf(pnl)}<small>${pct(pr)}</small></div>
       </div>
-      <div class="ladder" aria-hidden="true"><span class="rail"></span><span class="seg" style="left:${a}%;width:${w}%;background:${col}"></span>
-        <span class="m stop" style="left:${at(p.stop)}%"></span><span class="m cost" style="left:${at(p.entry)}%"></span><span class="m now" style="left:${at(p.price)}%;background:${col}"></span></div>
-      <div class="ladder-l">${[["停損",p.stop,"fall"],["成本",p.entry,""],["現價",p.price,cls(pnl)]].sort((u,v)=>u[1]-v[1])
-        .map(([k,v,c])=>`<span>${k}<b class="${c}">${nf(v,2)}</b></span>`).join("")}</div>
+      <div class="kv">
+        <div><span>成本</span><b>${nf(p.entry,2)}</b></div>
+        <div><span>現價</span><b class="${cls(pnl)}">${nf(p.price,2)}</b></div>
+        <div><span>停損</span><b>${nf(p.stop,2)}</b><small>${lock>0?`已鎖住 +${nf(lock)}`:`再跌 ${(room/(1+room)*100).toFixed(1)}% 出場`}</small></div>
+      </div>
       <div class="hold"><span>持有第 ${p.days} 天</span><span class="bar"><i style="width:${Math.min(100,p.days/RES.cfg.maxHold*100)}%"></i></span><span>最多 ${RES.cfg.maxHold} 天</span></div>
       <div class="why">買進理由：${esc(p.reasons.join("、"))}<br>
       會賣出的情況：盤中跌破 ${nf(p.stop,2)}，或收盤跌破 EMA${RES.cfg.exitEma}（${nf(p.exitLine,2)}）${RES.cfg.revExit?"，或營收3M跌破12M":""}${posWarn(p.code,s.date)}</div></div>`;
-  }).join(""):`<p class="empty">這天空手，等代理人找到符合條件的股票。</p>`);
+  }).join("")+etfRow:etfRow||`<p class="empty">這天空手，等代理人找到符合條件的股票。</p>`);
   const tl=$("#to-latest"); if(tl) tl.onclick=()=>{setPlaying(false);K=RES.snaps.length-1;render()};
 }
 
