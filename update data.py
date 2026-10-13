@@ -141,6 +141,9 @@ def add_finmind(stocks):
                 print(f"{code} 淨值比／融資／法人下載失敗：{e}")
             time.sleep(0.3)
     print(f"月營收：{ok['rev']}/{len(stocks)} 檔，淨值比／融資／法人：{ok['daily']}/{len(stocks)} 檔")
+    # 更新狀態（不含 token 本身），放在 data.json 最前面方便檢查
+    return dict(token=bool(os.environ.get("FINMIND_TOKEN")), rev=ok["rev"], daily=ok["daily"], total=len(stocks),
+                limit_hit=sorted(stop))
 
 
 def macro():
@@ -173,9 +176,9 @@ def main():
     if BENCH not in stocks or len(stocks) < 20:
         sys.exit(f"下載失敗，只拿到 {len(stocks)} 檔，不更新 data.json")
     bench = stocks.pop(BENCH)
-    add_finmind(stocks)
+    status = add_finmind(stocks)
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
-    data = dict(stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=macro(), source="real",
+    data = dict(finmind=status, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=macro(), source="real",
                 updated=now.strftime("%Y-%m-%d %H:%M"), last_date=bench["dates"][-1])
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
