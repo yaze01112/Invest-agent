@@ -57,21 +57,40 @@ class LimitHit(Exception):
     pass
 
 
-def finmind(dataset, code, start):
-    q = dict(dataset=dataset, data_id=code, start_date=start)
-    token = os.environ.get("FINMIND_TOKEN")  # 沒有也能用，有的話額度比較多
-    if token:
-        q["token"] = token
-    url = "https://api.finmindtrade.com/api/v4/data?" + urllib.parse.urlencode(q)
+TOKEN = {"value": (os.environ.get("FINMIND_TOKEN") or "").strip(), "ok": None, "error": ""}
+
+
+def _get(url, token):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"} if token else {})
     try:
-        with urllib.request.urlopen(url, timeout=30) as r:
-            js = json.load(r)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.load(r)
     except urllib.error.HTTPError as e:
-        if e.code in (402, 429):
+        try:
+            return e.code, json.load(e)
+        except Exception:
+            return e.code, {}
+
+
+def finmind(dataset, code, start):
+    url = "https://api.finmindtrade.com/api/v4/data?" + urllib.parse.urlencode(
+        dict(dataset=dataset, data_id=code, start_date=start))
+    if TOKEN["value"] and TOKEN["ok"] is not False:
+        st, js = _get(url, TOKEN["value"])
+        if st == 200 and js.get("status", 200) == 200:
+            TOKEN["ok"] = True
+            return js.get("data", [])
+        if st in (402, 429) or js.get("status") in (402, 429):
             raise LimitHit(dataset)
-        raise
-    if js.get("status") in (402, 429):
+        if TOKEN["ok"] is None:  # 第一次就失敗：token 可能無效，改用免費額度，不再用 token
+            TOKEN["ok"] = False
+            TOKEN["error"] = f"HTTP {st} {str(js.get('msg', ''))[:80]}"
+            print(f"FinMind token 無法使用（{TOKEN['error']}），改用免費額度")
+    st, js = _get(url, "")
+    if st in (402, 429) or js.get("status") in (402, 429):
         raise LimitHit(dataset)
+    if st != 200:
+        raise RuntimeError(f"HTTP {st} {str(js.get('msg', ''))[:80]}")
     return js.get("data", [])
 
 
@@ -116,6 +135,7 @@ def add_finmind(stocks):
     dstart = (today - dt.timedelta(days=365 * 3 + 10)).isoformat()
     ok = dict(rev=0, daily=0)
     stop = set()
+    last_err = ""
     for code, s in stocks.items():
         if "rev" not in stop:
             try:
@@ -126,6 +146,7 @@ def add_finmind(stocks):
             except LimitHit:
                 stop.add("rev"); print("FinMind 額度用完（月營收），之後的股票先跳過")
             except Exception as e:
+                last_err = f"月營收 {code}: {e}"
                 print(f"{code} 月營收下載失敗：{e}")
             time.sleep(0.3)
         if "daily" not in stop:
@@ -138,12 +159,13 @@ def add_finmind(stocks):
             except LimitHit:
                 stop.add("daily"); print("FinMind 額度用完（淨值比／融資／法人），之後的股票先跳過")
             except Exception as e:
+                last_err = f"淨值比等 {code}: {e}"
                 print(f"{code} 淨值比／融資／法人下載失敗：{e}")
             time.sleep(0.3)
     print(f"月營收：{ok['rev']}/{len(stocks)} 檔，淨值比／融資／法人：{ok['daily']}/{len(stocks)} 檔")
     # 更新狀態（不含 token 本身），放在 data.json 最前面方便檢查
-    return dict(token=bool(os.environ.get("FINMIND_TOKEN")), rev=ok["rev"], daily=ok["daily"], total=len(stocks),
-                limit_hit=sorted(stop))
+    return dict(token=bool(TOKEN["value"]), token_ok=TOKEN["ok"], token_error=TOKEN["error"], rev=ok["rev"],
+                daily=ok["daily"], total=len(stocks), limit_hit=sorted(stop), error=last_err[:120])
 
 
 def macro():
