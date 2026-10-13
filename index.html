@@ -295,6 +295,9 @@ a.tv-open{text-align:center;text-decoration:none}
   <label class="field"><span>長線濾網<small>股價要在 200 日均線之上</small></span><select id="f-longFilter"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>循環濾網<small>營收年增率連 2 月轉正才買</small></span><select id="f-cycleFilter"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>距高點跌幅<small>%，股價要比近 2 年高點低這麼多</small></span><input id="f-ddMin" type="number" inputmode="numeric" step="5" min="0" max="90"></label>
+  <label class="field"><span>滿倉模式<small>現金平均買進訊號股，盡量不留現金</small></span><select id="f-fullInvest"><option value="1">開</option><option value="0">關</option></select></label>
+  <label class="field"><span>單檔上限<small>滿倉時一檔最多占總資產 %</small></span><input id="f-maxPct" type="number" inputmode="numeric" step="5" min="10" max="100"></label>
+  <label class="field"><span>閒置現金買 0050<small>沒訊號時先停在 0050，有訊號再換股</small></span><select id="f-park"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>費半濾網<small>費城半導體跌破 60 日均線就不買</small></span><select id="f-macroFilter"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>營收 3M/12M 進場<small>谷底條件也接受 3 月均上穿 12 月均</small></span><select id="f-revCross"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>營收轉弱出場<small>營收 3 月均跌破 12 月均就賣</small></span><select id="f-revExit"><option value="1">開</option><option value="0">關</option></select></label>
@@ -304,7 +307,7 @@ a.tv-open{text-align:center;text-decoration:none}
   <label class="field"><span>保本停損<small>賺到 1.5 倍風險後停損移到成本</small></span><select id="f-breakeven"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>手續費折扣<small>例：0.28 代表 2.8 折</small></span><input id="f-discount" type="number" inputmode="decimal" step="0.01" min="0.1" max="1"></label>
   <button class="primary" id="apply">重新執行代理人</button>
-  <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。<br>谷底反轉風格（建議搭配景氣循環股）：先過循環濾網，最近 2 個月營收年增率都轉正、而且股價比近 2 年高點跌超過 50%，再看上面 6 個條件符合 3 個確認止跌；因為是抄底，關掉大盤和長線濾網，最多抱 60 天。營收用次月 11 日之後才算「已知」，回測不會偷看未來。產業報價止跌目前沒有自動資料，請自己另外確認。<br>其他指標（預設只在谷底反轉開啟）：營收 3 月均上穿 12 月均也算谷底訊號、營收 3 月均跌破 12 月均出場、融資使用率上限 30%、外資或投信連 3 日買超加 1 分；費半濾網和淨值比低檔預設關閉，可自己打開。首頁三個燈號是美債 10 年殖利率、美元兌台幣、費城半導體，只供參考。</p>
+  <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。<br>谷底反轉風格（建議搭配景氣循環股）：先過循環濾網，最近 2 個月營收年增率都轉正、而且股價比近 2 年高點跌超過 50%，再看上面 6 個條件符合 3 個確認止跌；因為是抄底，關掉大盤和長線濾網，最多抱 60 天。營收用次月 11 日之後才算「已知」，回測不會偷看未來。產業報價止跌目前沒有自動資料，請自己另外確認。<br>其他指標（預設只在谷底反轉開啟）：營收 3 月均上穿 12 月均也算谷底訊號、營收 3 月均跌破 12 月均出場、融資使用率上限 30%、外資或投信連 3 日買超加 1 分；費半濾網和淨值比低檔預設關閉，可自己打開。滿倉模式：收盤後選出的股票，隔天開盤把可用現金平均分配買進，單檔最多占總資產 50%（可調到 100%），關閉時改回原本「每筆最大虧損」的資金控管。閒置現金買 0050：沒有買進訊號時，超過總資產 5% 的現金會在收盤買 0050，有新買單時先賣掉 0050 再買股票（回測用收盤價近似，0050 的買賣不列入交易紀錄和勝率）。首頁三個燈號是美債 10 年殖利率、美元兌台幣、費城半導體，只供參考。</p>
 </div></div>
 
 <div class="sheet-bg" id="tv-sheet"><div class="sheet tv" role="dialog" aria-label="K 線圖">
@@ -353,11 +356,11 @@ const SECTOR = {
 const N_COND = 6;
 const nCond = cfg => N_COND + (cfg&&cfg.instBonus?1:0);   // 開啟法人加分時多 1 個條件
 const PRESETS = {
-  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0},
-  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0},
+  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1},
+  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1},
   // 谷底反轉：營收年增率轉正＋股價離高點夠遠，再用技術面確認止跌（6 選 3）；抄底所以關掉大盤與長線濾網，抱比較久
   cycle:        {maxPos:4, risk:2,   atrMult:2.5, maxHold:60, minScore:3, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:0, longFilter:0, breakeven:1, cycleFilter:1, ddMin:50,
-                 macroFilter:0, revCross:1, revExit:1, pbrMax:0, muMax:30, instBonus:1}};
+                 macroFilter:0, revCross:1, revExit:1, pbrMax:0, muMax:30, instBonus:1, fullInvest:1, maxPct:50, park:1}};
 const STYLE_LABEL = {aggressive:"積極", conservative:"保守", cycle:"谷底反轉", custom:"自訂"};
 const DEFAULT_CFG = {capital:100000, discount:1, minFee:1, feeRate:0.001425, tax:0.003, minPrice:10, ...PRESETS.aggressive};
 let UNI="tech", UNIVERSE=UNIVERSES.tech, STYLE="aggressive";
@@ -532,6 +535,16 @@ function score(s,i,cfg){
 }
 
 /* ================= 代理人 ================= */
+// 買幾股：滿倉模式把可用現金平均分給這批要買的股票（單檔不超過總資產的 maxPct%）；
+// 關閉時用原本的風險控管（每筆最大虧損 risk%、單檔不超過 1/maxPos）
+function sizeShares(cfg,eq,cash,px,dist,nLeft){
+  const afford=(cash-cfg.minFee)/(px*(1+cfg.feeRate));
+  if(cfg.fullInvest){
+    const budget=Math.min(cash/Math.max(nLeft,1), eq*(cfg.maxPct||100)/100);
+    return Math.floor(Math.min((budget-cfg.minFee)/(px*(1+cfg.feeRate)), afford));
+  }
+  return Math.floor(Math.min(eq*cfg.risk/100/dist, eq/cfg.maxPos/px, afford));
+}
 function runAgent(data,cfg,startDate){
   const S={}; for(const code in data.stocks) S[code]=indicators(data.stocks[code]);
   const dates=[...new Set(Object.values(S).flatMap(s=>s.dates))].sort();
@@ -547,7 +560,10 @@ function runAgent(data,cfg,startDate){
   let cash=cfg.capital, pos={}, pBuys=[], pSells={}, lastBench=null, pre=null;
   const last={}, trades=[], snaps=[];
   const fee=a=>Math.max(Math.floor(a*cfg.feeRate*cfg.discount),cfg.minFee);
-  const equity=()=>cash+Object.values(pos).reduce((t,p)=>t+p.shares*(last[p.code]??p.entry),0);
+  // 閒置現金停泊在 0050：以 0050 收盤價買賣，ETF 證交稅 0.1%（回測近似，不列入交易紀錄和勝率）
+  let etf=0, prevBench=null; const ETF_TAX=0.001;
+  const etfSell=px=>{ if(etf>0&&px>0){ const amt=etf*px; cash+=amt-fee(amt)-Math.floor(amt*ETF_TAX); etf=0; } };
+  const equity=()=>cash+etf*(lastBench||0)+Object.values(pos).reduce((t,p)=>t+p.shares*(last[p.code]??p.entry),0);
   function sell(code,px,date,reason){
     const p=pos[code]; delete pos[code];
     const amt=px*p.shares, f=fee(amt), tax=Math.floor(amt*cfg.tax);
@@ -583,6 +599,7 @@ function runAgent(data,cfg,startDate){
   for(let di=30;di<dates.length;di++){
     const date=dates[di], bars={};
     for(const code in S){const i=S[code].at.get(date); if(i!==undefined) bars[code]=i;}
+    prevBench=lastBench;
     if(benchAt.has(date)){ lastBench=benchAt.get(date); lastBMA=benchMAAt.get(date); }
     if(soxAt&&soxAt.has(date)){ const j=soxAt.get(date); lastSox=M.sox.c[j]; lastSoxMA=soxMA[j]; }
     // 起算日之前：只看盤、不交易（起算日前一天收盤決定第一批買單）
@@ -592,13 +609,15 @@ function runAgent(data,cfg,startDate){
       if(pos[code]&&bars[code]!==undefined) sell(code,S[code].o[bars[code]],date,pSells[code]);
       if(!pos[code]) delete pSells[code];
     }
-    // 2) 開盤買進
+    // 2) 開盤買進（有買單時先賣掉停泊的 0050，用昨天收盤價近似）
+    if(etf>0&&pBuys.length) etfSell(prevBench);
     const eq=equity();
-    for(const o of pBuys){
-      const s=S[o.code], i=bars[o.code];
-      if(i===undefined||pos[o.code]||Object.keys(pos).length>=cfg.maxPos) continue;
-      const px=s.o[i];
-      const shares=Math.floor(Math.min(eq*cfg.risk/100/o.dist, eq/cfg.maxPos/px, (cash-cfg.minFee)/(px*(1+cfg.feeRate))));
+    const todo=pBuys.filter(o=>bars[o.code]!==undefined&&!pos[o.code]);
+    for(let bi=0;bi<todo.length;bi++){
+      const o=todo[bi], s=S[o.code], i=bars[o.code];
+      if(Object.keys(pos).length>=cfg.maxPos) break;
+      const px=s.o[i], nLeft=Math.min(todo.length-bi, cfg.maxPos-Object.keys(pos).length);
+      const shares=sizeShares(cfg,eq,cash,px,o.dist,nLeft);
       if(shares<1) continue;
       const f=fee(px*shares); cash-=px*shares+f;
       pos[o.code]={code:o.code,shares,entry:px,stop:px-o.dist,r0:o.dist,be:false,exitLine:NaN,entryDate:date,days:0,buyFee:f,reasons:o.reasons};
@@ -626,7 +645,10 @@ function runAgent(data,cfg,startDate){
     }
     // 5) 收盤：選股
     pBuys=scan(bars);
-    snaps.push({date,equity:equity(),cash,bench:lastBench,mkt:mkt(),nTrades:trades.length,
+    // 6) 收盤：閒置現金超過總資產 5% 就買 0050 停泊
+    if(cfg.park&&lastBench>0){ const eq2=equity();
+      if(cash>eq2*0.05){ const u=Math.floor((cash-cfg.minFee)/(lastBench*(1+cfg.feeRate))); if(u>0){ cash-=u*lastBench+fee(u*lastBench); etf+=u; } } }
+    snaps.push({date,equity:equity(),cash,etfVal:etf*(lastBench||0),bench:lastBench,mkt:mkt(),nTrades:trades.length,
       pos:Object.values(pos).map(p=>({...p,price:last[p.code]})),pBuys:pBuys.map(o=>({...o})),pSells:{...pSells}});
   }
   const firstB=snaps.find(s=>s.bench!=null)?.bench;
@@ -699,24 +721,26 @@ function renderMacro(date){
 // 算出下個開盤要下的單（股數用昨收估算，跟代理人同一套算法）
 function planOrders(snap,pre){
   const cfg=RES.cfg, pos=snap?snap.pos:[], pS=snap?snap.pSells:{}, pB=snap?snap.pBuys:(pre?pre.pBuys:[]);
-  let cash=snap?snap.cash:cfg.capital; const eq=snap?snap.equity:cfg.capital;
+  let cash=snap?snap.cash+(snap.etfVal||0)*(1-cfg.feeRate-0.001):cfg.capital; const eq=snap?snap.equity:cfg.capital;
   const sells=[], buys=[]; let held=0;
   for(const p of pos){ if(pS[p.code]){ sells.push({code:p.code,shares:p.shares,reason:pS[p.code]}); cash+=p.shares*p.price*(1-cfg.feeRate-cfg.tax);} else held++; }
-  for(const o of pB){
+  for(let bi=0;bi<pB.length;bi++){
+    const o=pB[bi];
     if(held>=cfg.maxPos) break;
-    const px=o.px, sh=Math.floor(Math.min(eq*cfg.risk/100/o.dist, eq/cfg.maxPos/px, (cash-cfg.minFee)/(px*(1+cfg.feeRate))));
+    const px=o.px, sh=sizeShares(cfg,eq,cash,px,o.dist,Math.min(pB.length-bi,cfg.maxPos-held));
     if(!(sh>=1)) continue;
     cash-=sh*px*(1+cfg.feeRate); held++;
     buys.push({code:o.code,shares:sh,px,score:o.score,reasons:o.reasons});
   }
-  return {sells,buys};
+  return {sells,buys,etfSell:!!(snap&&snap.etfVal>0&&buys.length)};
 }
 function renderPlan(pl){
   if(!pl.sells.length&&!pl.buys.length) return `<p class="empty">不動作，繼續觀察。</p>`;
   const row=(b,code,main,sub)=>`<div class="order" data-code="${code}"><span class="act plan ${b?"buy":"sell"}">${b?"買":"賣"}</span>
     <div><div class="t">${esc(nm(code))}</div><div class="r">${sub}</div></div>
     <div class="amt">${main}<small>${tvSymbol(code)}</small></div></div>`;
-  return pl.sells.map(x=>row(false,x.code,`${nf(x.shares)} 股`,`全部賣出：${esc(x.reason)}`)).join("")
+  return (pl.etfSell?`<p class="note">開盤先賣掉停泊的 0050，換成下面的股票。</p>`:"")
+    +pl.sells.map(x=>row(false,x.code,`${nf(x.shares)} 股`,`全部賣出：${esc(x.reason)}`)).join("")
     +pl.buys.map(x=>row(true,x.code,`${nf(x.shares)} 股`,`約 ${nf(x.px*x.shares)} 元（昨收 ${nf(x.px,2)}）<br>${x.score}/${nCond(RES.cfg)} 分：${esc(x.reasons.join("、"))}`)).join("")
     +`<button class="more" id="copy-plan">複製下單清單</button>`;
 }
@@ -794,7 +818,7 @@ function posWarn(code,date){
 function renderPos(k){
   const s=RES.snaps[k];
   const latest=k===RES.snaps.length-1;
-  $("#cash").textContent=`${latest?"最新 ":""}${s.date}　現金 NT$${nf(s.cash)}`;
+  $("#cash").textContent=`${latest?"最新 ":""}${s.date}　現金 NT$${nf(s.cash)}${s.etfVal>0?`　0050 停泊 NT$${nf(s.etfVal)}`:""}`;
   $("#pos").innerHTML=(latest?"":`<button class="more" id="to-latest" style="margin-top:0">這是 ${s.date} 的持股，回到最新一天</button>`)+(s.pos.length?s.pos.map(p=>{
     const pnl=(p.price-p.entry)*p.shares, pr=p.price/p.entry-1;
     return `<div class="pos ${pnl>=0?"up":"dn"}" data-code="${p.code}">
@@ -958,9 +982,9 @@ $$(".chips button").forEach(b=>b.onclick=()=>{
 });
 
 /* ================= 設定 ================= */
-const FIELDS=["capital","maxPos","risk","atrMult","maxHold","minScore","discount","minLots","maxPerSector","ddMin","pbrMax","muMax"];
-const PFIELDS=["maxPos","risk","atrMult","maxHold","minScore","minLots","maxPerSector","ddMin","pbrMax","muMax"];
-const TOGGLES=["mktFilter","longFilter","breakeven","cycleFilter","macroFilter","revCross","revExit","instBonus"];
+const FIELDS=["capital","maxPos","risk","atrMult","maxHold","minScore","discount","minLots","maxPerSector","ddMin","pbrMax","muMax","maxPct"];
+const PFIELDS=["maxPos","risk","atrMult","maxHold","minScore","minLots","maxPerSector","ddMin","pbrMax","muMax","maxPct"];
+const TOGGLES=["mktFilter","longFilter","breakeven","cycleFilter","macroFilter","revCross","revExit","instBonus","fullInvest","park"];
 function openSheet(){
   setPlaying(false);
   $("#f-src").value=SRC; $("#f-years").value=YEARS;
