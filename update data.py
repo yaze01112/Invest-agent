@@ -1,9 +1,11 @@
 """
-下載真實台股日K＋月營收年增率，輸出 data.json 給網頁使用。
+下載真實台股日K、月營收年增率、淨值比、融資使用率、法人買賣超，以及美債殖利率／匯率／費半，
+輸出 data.json 給網頁使用。
+FinMind 免費額度每小時約 300 次；到 GitHub「Settings → Secrets → Actions」新增 FINMIND_TOKEN（免費註冊）可以提高額度。
 GitHub Actions 每個交易日收盤後自動執行；也可以在自己電腦跑：python update_data.py
 """
 import json, os, sys, time, datetime as dt
-import urllib.request, urllib.parse
+import urllib.request, urllib.parse, urllib.error
 import pandas as pd
 import yfinance as yf
 
@@ -48,16 +50,35 @@ def download(symbols):
     return out
 
 
-def month_revenue(code, start):
-    """從 FinMind 抓月營收，回傳 [[可用日期, 年增率], ...]。
-    營收在次月 10 日前公布，所以用次月 11 日當「可用日期」，回測才不會偷看未來。"""
-    q = dict(dataset="TaiwanStockMonthRevenue", data_id=code, start_date=start)
+MACRO = {"tnx": "^TNX", "twd": "TWD=X", "sox": "^SOX"}  # 10 年期美債殖利率、美元兌台幣、費城半導體指數
+
+
+class LimitHit(Exception):
+    pass
+
+
+def finmind(dataset, code, start):
+    q = dict(dataset=dataset, data_id=code, start_date=start)
     token = os.environ.get("FINMIND_TOKEN")  # 沒有也能用，有的話額度比較多
     if token:
         q["token"] = token
     url = "https://api.finmindtrade.com/api/v4/data?" + urllib.parse.urlencode(q)
-    with urllib.request.urlopen(url, timeout=30) as r:
-        rows = json.load(r).get("data", [])
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            js = json.load(r)
+    except urllib.error.HTTPError as e:
+        if e.code in (402, 429):
+            raise LimitHit(dataset)
+        raise
+    if js.get("status") in (402, 429):
+        raise LimitHit(dataset)
+    return js.get("data", [])
+
+
+def month_revenue(code, start):
+    """月營收，回傳 [[可用日期, 年增率], ...]。
+    營收在次月 10 日前公布，所以用次月 11 日當「可用日期」，回測才不會偷看未來。"""
+    rows = finmind("TaiwanStockMonthRevenue", code, start)
     rev = {(int(x["revenue_year"]), int(x["revenue_month"])): float(x["revenue"]) for x in rows if x.get("revenue")}
     out = []
     for (y, m), v in sorted(rev.items()):
@@ -69,19 +90,74 @@ def month_revenue(code, start):
     return out
 
 
-def add_revenue(stocks):
-    start = (dt.date.today() - dt.timedelta(days=365 * 4 + 40)).isoformat()
-    ok = 0
-    for code in stocks:
+def daily_fields(code, start):
+    """淨值比、融資使用率(%)、外資與投信買賣超(張)，依日期整理成 dict。"""
+    out = {}
+    for x in finmind("TaiwanStockPER", code, start):
+        if x.get("PBR"):
+            out.setdefault(x["date"], {})["pbr"] = round(float(x["PBR"]), 2)
+    time.sleep(0.3)
+    for x in finmind("TaiwanStockMarginPurchaseShortSale", code, start):
+        lim = float(x.get("MarginPurchaseLimit") or 0)
+        if lim > 0:
+            out.setdefault(x["date"], {})["mu"] = round(float(x.get("MarginPurchaseTodayBalance") or 0) / lim * 100, 1)
+    time.sleep(0.3)
+    for x in finmind("TaiwanStockInstitutionalInvestorsBuySell", code, start):
+        k = "fi" if x.get("name", "").startswith("Foreign_Investor") else "it" if x.get("name") == "Investment_Trust" else None
+        if k:
+            d = out.setdefault(x["date"], {})
+            d[k] = d.get(k, 0) + round((float(x.get("buy") or 0) - float(x.get("sell") or 0)) / 1000)
+    return out
+
+
+def add_finmind(stocks):
+    today = dt.date.today()
+    rstart = (today - dt.timedelta(days=365 * 4 + 40)).isoformat()
+    dstart = (today - dt.timedelta(days=365 * 3 + 10)).isoformat()
+    ok = dict(rev=0, daily=0)
+    stop = set()
+    for code, s in stocks.items():
+        if "rev" not in stop:
+            try:
+                r = month_revenue(code, rstart)
+                if r:
+                    s["rev"] = r
+                    ok["rev"] += 1
+            except LimitHit:
+                stop.add("rev"); print("FinMind 額度用完（月營收），之後的股票先跳過")
+            except Exception as e:
+                print(f"{code} 月營收下載失敗：{e}")
+            time.sleep(0.3)
+        if "daily" not in stop:
+            try:
+                f = daily_fields(code, dstart)
+                if f:
+                    for k in ("pbr", "mu", "fi", "it"):  # 對齊股價日期，沒有資料就填 null
+                        s[k] = [f.get(d, {}).get(k) for d in s["dates"]]
+                    ok["daily"] += 1
+            except LimitHit:
+                stop.add("daily"); print("FinMind 額度用完（淨值比／融資／法人），之後的股票先跳過")
+            except Exception as e:
+                print(f"{code} 淨值比／融資／法人下載失敗：{e}")
+            time.sleep(0.3)
+    print(f"月營收：{ok['rev']}/{len(stocks)} 檔，淨值比／融資／法人：{ok['daily']}/{len(stocks)} 檔")
+
+
+def macro():
+    out = {}
+    for k, sy in MACRO.items():
         try:
-            r = month_revenue(code, start)
-            if r:
-                stocks[code]["rev"] = r
-                ok += 1
+            df = yf.download(sy, period="3y", auto_adjust=True, progress=False)
+            c = df["Close"]
+            if isinstance(c, pd.DataFrame):
+                c = c.iloc[:, 0]
+            c = c.dropna()
+            if len(c) >= 60:
+                out[k] = dict(dates=[d.strftime("%Y-%m-%d") for d in c.index], c=[round(float(x), 3) for x in c])
         except Exception as e:
-            print(f"{code} 月營收下載失敗：{e}")
-        time.sleep(0.4)  # 放慢一點，避免超過 FinMind 免費額度
-    print(f"月營收：{ok}/{len(stocks)} 檔")
+            print(f"{sy} 下載失敗：{e}")
+    print(f"總體指標：{list(out)}")
+    return out
 
 
 def main():
@@ -97,9 +173,9 @@ def main():
     if BENCH not in stocks or len(stocks) < 20:
         sys.exit(f"下載失敗，只拿到 {len(stocks)} 檔，不更新 data.json")
     bench = stocks.pop(BENCH)
-    add_revenue(stocks)
+    add_finmind(stocks)
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
-    data = dict(stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), source="real",
+    data = dict(stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=macro(), source="real",
                 updated=now.strftime("%Y-%m-%d %H:%M"), last_date=bench["dates"][-1])
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))

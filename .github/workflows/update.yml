@@ -30,6 +30,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python "update data.py"
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}   # 選填：沒設定也能跑
       - run: mkdir -p site && cp index.html data.json site/
       - uses: actions/upload-pages-artifact@v3
         with:
