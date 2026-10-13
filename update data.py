@@ -295,40 +295,73 @@ def market_list():
     return info
 
 
+HIST_FROM = "2026-09-01"  # 從這天開始，每個交易日的主動選股名單都存檔，存了就不再改
+
+
+def rank_by_day(turnover, n=ACTIVE_N, start=HIST_FROM):
+    """turnover：日期 × 股票 的成交值表。每一天只用「那天以前」近 20 個交易日的平均成交值排名，取前 n 名。
+    這樣某一天的名單只用到那天收盤時已經知道的資料，不會偷看未來。"""
+    avg = turnover.sort_index().rolling(20, min_periods=10).mean()
+    out = {}
+    for d, row in avg.iterrows():
+        key = d.strftime("%Y-%m-%d")
+        if key < start:
+            continue
+        row = row.dropna()
+        row = row[row > 0]
+        if len(row) >= n:
+            out[key] = sorted(row.nlargest(n).index.tolist())
+    return out
+
+
 def pick_active(info, n=ACTIVE_N):
-    """用近 20 個交易日的平均成交值（收盤價 × 成交量）排名，取前 n 名。"""
+    """回傳 {日期: 當天成交值前 n 名}，涵蓋 HIST_FROM 之後的每個交易日。"""
     syms = {sym(c, v["otc"]): c for c, v in info.items()}
-    raw = yf.download(list(syms), period="2mo", group_by="ticker", auto_adjust=True, progress=False, threads=True)
-    value = {}
+    raw = yf.download(list(syms), period="6mo", group_by="ticker", auto_adjust=True, progress=False, threads=True)
+    cols = {}
     for s_, c in syms.items():
         try:
-            df = raw[s_].dropna().tail(20)
+            df = raw[s_].dropna()
+            df = df[df["Volume"] > 0]
             if len(df) >= 10:
-                value[c] = float((df["Close"] * df["Volume"]).mean())
+                cols[c] = df["Close"] * df["Volume"]
         except Exception:
             pass
-    top = sorted(value, key=value.get, reverse=True)[:n]
-    print(f"主動選股：全市場 {len(info)} 檔，有成交資料 {len(value)} 檔，取成交值前 {len(top)} 名")
-    return top
+    hist = rank_by_day(pd.DataFrame(cols), n) if cols else {}
+    print(f"主動選股：全市場 {len(info)} 檔，有成交資料 {len(cols)} 檔，算出 {len(hist)} 個交易日的名單")
+    return hist
+
+
+def merge_hist(new, prev_hist, now):
+    """已經存檔的日子一律沿用舊名單（不改寫過去）；今天如果還沒收盤（14:30 前），今天的名單先不存。"""
+    today = now.strftime("%Y-%m-%d")
+    final = {d: v for d, v in new.items() if d < today or now.hour * 60 + now.minute >= 14 * 60 + 35}
+    merged = {**final, **{d: v for d, v in (prev_hist or {}).items() if d >= HIST_FROM}}
+    added = sorted(set(merged) - set(prev_hist or {}))
+    print(f"名單存檔：共 {len(merged)} 天，這次新增 {len(added)} 天{('（' + added[0] + ' ~ ' + added[-1] + '）') if added else ''}")
+    return dict(sorted(merged.items()))
 
 
 def main():
     prev = previous_data()
-    info, active = {}, []
+    now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
+    info, new_hist = {}, {}
     try:
         info = market_list()
         for c, v in info.items():
             if v["otc"]:
                 OTC.add(c)
-        active = pick_active(info)
+        new_hist = pick_active(info)
     except Exception as e:
         print(f"主動選股失敗：{e}")
-    if not active and prev.get("active"):  # 這次選不出來就沿用上次的名單
-        active = prev["active"]
+    if not new_hist and not info and prev.get("names"):  # 這次抓不到全市場資料，名稱和產業沿用上次的
         info = {c: dict(name=prev.get("names", {}).get(c, c), sector=prev.get("sectors", {}).get(c, ""), otc=False) for c in prev.get("names", {})}
-        print(f"沿用上次的主動選股名單：{len(active)} 檔")
+    hist = merge_hist(new_hist, prev.get("active_hist"), now)
+    # 今天的名單：有算出來就用（收盤前也先拿來顯示），否則用最後一個存檔的日子，再不行就沿用上次的
+    active = new_hist[max(new_hist)] if new_hist else (hist[max(hist)] if hist else prev.get("active", []))
     fixed = sorted(set(TECH + MIXED + CYCLE))
-    codes = sorted(set(fixed + active)) + [BENCH]
+    ever = set(active).union(*hist.values()) if hist else set(active)   # 曾經進過名單的股票都要留著，過去的交易才算得出來
+    codes = sorted(set(fixed) | ever) + [BENCH]
     got = download([sym(c) for c in codes])
     stocks = {c: got[sym(c)] for c in codes if sym(c) in got}
     missing = [c for c in codes if c not in stocks]
@@ -342,7 +375,6 @@ def main():
     bench = stocks.pop(BENCH)
     status = add_finmind(stocks, prev)
     fill_from_previous(stocks, prev)
-    now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
     names = {c: info[c]["name"] for c in stocks if c in info}
     sectors = {c: info[c]["sector"] for c in stocks if c in info and info[c]["sector"]}
     mk = macro()
@@ -354,7 +386,7 @@ def main():
         if k not in mk and prev.get("macro", {}).get(k):
             mk[k] = prev["macro"][k]
     status["market"] = [k for k in ("fiall", "margin", "txfi") if k in mk]
-    data = dict(finmind=status, active=[c for c in active if c in stocks], names=names, sectors=sectors, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=mk, source="real",
+    data = dict(finmind=status, active=[c for c in active if c in stocks], active_hist=hist, names=names, sectors=sectors, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=mk, source="real",
                 updated=now.strftime("%Y-%m-%d %H:%M"), last_date=bench["dates"][-1])
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))

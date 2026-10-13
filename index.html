@@ -358,7 +358,7 @@ a.tv-open{text-align:center;text-decoration:none}
   <h3>設定 <button class="icon" id="close-set" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
   <p class="sec-title">資料</p>
   <label class="field"><span>股票池</span>
-    <select id="f-uni"><option value="tech">科技股 30 檔</option><option value="mixed">權值綜合 30 檔</option><option value="cycle">景氣循環股 21 檔</option><option value="active">主動選股（全市場成交值前 100）</option></select></label>
+    <select id="f-uni"><option value="tech">科技股 30 檔</option><option value="mixed">權值綜合 30 檔</option><option value="cycle">景氣循環股 21 檔</option><option value="active">主動選股（每天的成交值前 100）</option></select></label>
   <label class="field"><span>資料來源</span>
     <select id="f-src"><option value="real">真實台股</option><option value="demo">示範資料</option></select></label>
   <label class="field"><span>績效計算</span>
@@ -366,7 +366,7 @@ a.tv-open{text-align:center;text-decoration:none}
   <label class="field" id="start-row"><span>起算日<small>本金從這天開始算</small></span><input id="f-start" type="date" style="width:160px"></label>
   <label class="field" id="years-row"><span>回測期間</span>
     <select id="f-years"><option value="1">1 年</option><option value="2" selected>2 年</option><option value="3">3 年</option></select></label>
-  <p class="note" id="src-note">真實台股讀取網站上每天收盤後自動更新的 data.json（還原權息的日K）。找不到時會暫時改用示範資料。「從起算日開始」時，代理人只用起算日之前的資料算指標，起算日開盤才開始交易；示範資料每天收盤後會多一天模擬行情。</p>
+  <p class="note" id="src-note">真實台股讀取網站上每天收盤後自動更新的 data.json（還原權息的日K）。找不到時會暫時改用示範資料。「從起算日開始」時，代理人只用起算日之前的資料算指標，起算日開盤才開始交易；示範資料每天收盤後會多一天模擬行情。<br>主動選股：每個交易日收盤後，把全市場近 20 日平均成交值前 100 名存檔，代理人那天只能從那天的名單買新股票，名單存了就不會再改，所以過去的交易不會因為今天的名單變了而跟著變。2026-09-01 以前沒有存檔，改用固定的科技、權值、循環股池。</p>
 
   <p class="sec-title">策略</p>
   <label class="field"><span>風格<small>切換會套用整組參數</small></span>
@@ -542,7 +542,9 @@ async function fetchReal(){
   const stocks={};
   for(const [code] of UNIVERSE) if(REAL_RAW.stocks[code]) stocks[code]=adjust(JSON.parse(JSON.stringify(REAL_RAW.stocks[code])));
   if(Object.keys(stocks).length<5) throw new Error("資料太少");
-  return {stocks,bench:REAL_RAW.bench,macro:REAL_RAW.macro||{},source:"real",updated:REAL_RAW.updated};
+  const H=REAL_RAW.active_hist;
+  return {stocks,bench:REAL_RAW.bench,macro:REAL_RAW.macro||{},source:"real",updated:REAL_RAW.updated,
+    hist:UNI==="active"&&H&&Object.keys(H).length?H:null};
 }
 // 台股漲跌幅限制 10%，開盤跳動超過 15% 視為分割/減資，往前調整價格
 function adjust(s){
@@ -653,8 +655,20 @@ function sizeShares(cfg,eq,cash,px,dist,nLeft){
   }
   return Math.floor(Math.min(eq*cfg.risk/100/dist, eq/cfg.maxPos/px, afford));
 }
+// 主動選股的「當天名單」：某一天只能從那天收盤時的成交值前 100 名裡挑新股票（名單每天存檔，不會事後改變）。
+// 存檔開始之前的日子沒有名單，就用固定的科技、權值、循環股池。沒有存檔資料時（示範資料、舊版 data.json）不限制。
+const FIXED_POOL=new Set([...UNIVERSES.tech,...UNIVERSES.mixed,...UNIVERSES.cycle].map(x=>x[0]));
+function makeAllow(hist){
+  if(!hist) return ()=>null;
+  const days=Object.keys(hist).sort(), sets=days.map(d=>new Set(hist[d]));
+  return date=>{
+    let lo=0,hi=days.length-1,j=-1; while(lo<=hi){const m=(lo+hi)>>1; if(days[m]<=date){j=m;lo=m+1}else hi=m-1;}
+    return j<0?FIXED_POOL:sets[j];
+  };
+}
 function runAgent(data,cfg,startDate){
   const S={}; for(const code in data.stocks) S[code]=indicators(data.stocks[code]);
+  const allowAt=makeAllow(data.hist);
   const dates=[...new Set(Object.values(S).flatMap(s=>s.dates))].sort();
   const benchAt=new Map(data.bench.dates.map((d,i)=>[d,data.bench.c[i]]));
   const bMA=rollMean(data.bench.c,60), benchMAAt=new Map(data.bench.dates.map((d,i)=>[d,bMA[i]]));
@@ -682,11 +696,13 @@ function runAgent(data,cfg,startDate){
     trades.push({date,code,action:"SELL",price:px,shares:p.shares,cost:f+tax,
       pnl:Math.round(amt-f-tax-p.entry*p.shares-p.buyFee),days:p.days,reason});
   }
-  function scan(bars){
+  function scan(bars,date){
     const free=cfg.maxPos-Object.keys(pos).length+Object.keys(pSells).length, cands=[];
     if(!mkt().ok) return [];                      // 大盤在 60 日均線下：暫停新買進
+    const allow=allowAt(date);                    // 這天收盤時的主動選股名單
     for(const code in bars){
       const s=S[code], i=bars[code];
+      if(allow&&!allow.has(code)) continue;
       if(pos[code]||s.c[i]<cfg.minPrice||!(s.vm20[i]>=cfg.minLots*1000)||!(s.atr[i]>0)) continue;
       if(cfg.longFilter&&!(s.c[i]>s.ma200[i])) continue;   // 長線趨勢：站上 200 日均線
       if(cfg.cycleFilter&&!cycleOK(s,i,cfg)) continue;     // 谷底反轉：營收剛轉正＋離高點夠遠
@@ -716,7 +732,7 @@ function runAgent(data,cfg,startDate){
     if(txAt&&txAt.has(date)) lastTx=txAt.get(date);
     if(fi5At&&fi5At.has(date)) lastFi5=fi5At.get(date);
     // 起算日之前：只看盤、不交易（起算日前一天收盤決定第一批買單）
-    if(startDate&&date<startDate){ pBuys=scan(bars); pre={date,bench:lastBench,mkt:mkt(),pBuys:pBuys.map(o=>({...o}))}; continue; }
+    if(startDate&&date<startDate){ pBuys=scan(bars,date); pre={date,bench:lastBench,mkt:mkt(),pBuys:pBuys.map(o=>({...o}))}; continue; }
     // 1) 開盤賣出
     for(const code of Object.keys(pSells)){
       if(pos[code]&&bars[code]!==undefined) sell(code,S[code].o[bars[code]],date,pSells[code]);
@@ -757,7 +773,7 @@ function runAgent(data,cfg,startDate){
       else if(p.days>=cfg.maxHold) pSells[code]=`持有滿${cfg.maxHold}天`;
     }
     // 5) 收盤：選股
-    pBuys=scan(bars);
+    pBuys=scan(bars,date);
     // 6) 收盤：閒置現金超過總資產 5% 就買 0050 停泊
     if(cfg.park&&lastBench>0){ const eq2=equity();
       if(cash>eq2*0.05){ const u=Math.floor((cash-cfg.minFee)/(lastBench*(1+cfg.feeRate))); if(u>0){ cash-=u*lastBench+fee(u*lastBench); etf+=u; } } }
@@ -767,7 +783,7 @@ function runAgent(data,cfg,startDate){
   const firstB=snaps.find(s=>s.bench!=null)?.bench;
   snaps.forEach(s=>{if(s.bench==null)s.bench=firstB});
   const benchBase=(pre&&pre.bench)||firstB;
-  return {snaps,trades,cfg,pre,startDate,benchBase,S};
+  return {snaps,trades,cfg,pre,startDate,benchBase,S,allowAt};
 }
 
 /* ================= 畫面 ================= */
@@ -895,8 +911,9 @@ function bindCopy(pl){
 }
 // 觀察名單：依代理人 6 個條件，列出這天分數最高的 5 檔（只是觀察，不影響交易）
 function watchlist(date,snap){
-  const cfg=RES.cfg, out=[], held=new Set((snap?snap.pos:[]).map(p=>p.code));
+  const cfg=RES.cfg, out=[], held=new Set((snap?snap.pos:[]).map(p=>p.code)), allow=RES.allowAt(date);
   for(const code in RES.S){
+    if(allow&&!allow.has(code)) continue;
     const s=RES.S[code], i=s.at.get(date); if(i===undefined) continue;
     const [sc,rs]=score(s,i,cfg);
     const cyc=cfg.cycleFilter?{turn:!!s.revTurn[i],deep:s.dd[i]>=cfg.ddMin/100,tags:cycleTags(s,i)}:null;
