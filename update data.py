@@ -252,6 +252,12 @@ def macro():
 ACTIVE_N = 100  # 主動選股：全市場成交值前幾名
 
 
+def note(msg):
+    """印在執行紀錄裡，同時顯示在 GitHub Actions 這次執行的摘要（Annotations）。"""
+    print(msg)
+    print("::notice::" + msg.replace("\n", " "))
+
+
 def previous_data():
     """讀取網站上一次發佈的 data.json；這次抓不到的資料（額度用完、網路錯誤）就沿用上次的。"""
     repo = os.environ.get("GITHUB_REPOSITORY", "yaze01112/Invest-agent")
@@ -328,7 +334,7 @@ def pick_active(info, n=ACTIVE_N):
         except Exception:
             pass
     hist = rank_by_day(pd.DataFrame(cols), n) if cols else {}
-    print(f"主動選股：全市場 {len(info)} 檔，有成交資料 {len(cols)} 檔，算出 {len(hist)} 個交易日的名單")
+    note(f"主動選股：全市場 {len(info)} 檔，有成交資料 {len(cols)} 檔，算出 {len(hist)} 個交易日的名單")
     return hist
 
 
@@ -338,7 +344,7 @@ def merge_hist(new, prev_hist, now):
     final = {d: v for d, v in new.items() if d < today or now.hour * 60 + now.minute >= 14 * 60 + 35}
     merged = {**final, **{d: v for d, v in (prev_hist or {}).items() if d >= HIST_FROM}}
     added = sorted(set(merged) - set(prev_hist or {}))
-    print(f"名單存檔：共 {len(merged)} 天，這次新增 {len(added)} 天{('（' + added[0] + ' ~ ' + added[-1] + '）') if added else ''}")
+    note(f"名單存檔：共 {len(merged)} 天，這次新增 {len(added)} 天{('（' + added[0] + ' ~ ' + added[-1] + '）') if added else ''}")
     return dict(sorted(merged.items()))
 
 
@@ -347,13 +353,17 @@ def main():
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
     info, new_hist = {}, {}
     try:
-        info = market_list()
+        try:
+            info = market_list()
+        except Exception as e:  # FinMind 額度用完時，用上次存下來的全市場清單
+            info = {c: dict(name=v[0], sector=v[1], otc=bool(v[2])) for c, v in (prev.get("market") or {}).items()}
+            note(f"全市場清單下載失敗（{e}），改用上次存的清單：{len(info)} 檔")
         for c, v in info.items():
             if v["otc"]:
                 OTC.add(c)
         new_hist = pick_active(info)
     except Exception as e:
-        print(f"主動選股失敗：{e}")
+        note(f"主動選股失敗：{e}")
     if not new_hist and not info and prev.get("names"):  # 這次抓不到全市場資料，名稱和產業沿用上次的
         info = {c: dict(name=prev.get("names", {}).get(c, c), sector=prev.get("sectors", {}).get(c, ""), otc=False) for c in prev.get("names", {})}
     hist = merge_hist(new_hist, prev.get("active_hist"), now)
@@ -386,11 +396,11 @@ def main():
         if k not in mk and prev.get("macro", {}).get(k):
             mk[k] = prev["macro"][k]
     status["market"] = [k for k in ("fiall", "margin", "txfi") if k in mk]
-    data = dict(finmind=status, active=[c for c in active if c in stocks], active_hist=hist, names=names, sectors=sectors, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=mk, source="real",
+    data = dict(finmind=status, active=[c for c in active if c in stocks], active_hist=hist, market={c: [v["name"], v["sector"], int(v["otc"])] for c, v in info.items()} if len(info) > 500 else prev.get("market", {}), names=names, sectors=sectors, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=mk, source="real",
                 updated=now.strftime("%Y-%m-%d %H:%M"), last_date=bench["dates"][-1])
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"完成：{len(stocks)} 檔，最新交易日 {data['last_date']}，缺少 {[c for c in codes if c not in stocks and c != BENCH]}")
+    note(f"完成：{len(stocks)} 檔，最新交易日 {data['last_date']}，缺少 {[c for c in codes if c not in stocks and c != BENCH]}")
 
 
 if __name__ == "__main__":
