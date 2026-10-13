@@ -298,6 +298,7 @@ a.tv-open{text-align:center;text-decoration:none}
   <label class="field"><span>滿倉模式<small>現金平均買進訊號股，盡量不留現金</small></span><select id="f-fullInvest"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>單檔上限<small>滿倉時一檔最多占總資產 %</small></span><input id="f-maxPct" type="number" inputmode="numeric" step="5" min="10" max="100"></label>
   <label class="field"><span>閒置現金買 0050<small>沒訊號時先停在 0050，有訊號再換股</small></span><select id="f-park"><option value="1">開</option><option value="0">關</option></select></label>
+  <label class="field"><span>籌碼濾網<small>外資期貨淨空 3 萬口以上且近 5 日賣超就不買</small></span><select id="f-chipFilter"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>費半濾網<small>費城半導體跌破 60 日均線就不買</small></span><select id="f-macroFilter"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>營收 3M/12M 進場<small>谷底條件也接受 3 月均上穿 12 月均</small></span><select id="f-revCross"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>營收轉弱出場<small>營收 3 月均跌破 12 月均就賣</small></span><select id="f-revExit"><option value="1">開</option><option value="0">關</option></select></label>
@@ -307,7 +308,7 @@ a.tv-open{text-align:center;text-decoration:none}
   <label class="field"><span>保本停損<small>賺到 1.5 倍風險後停損移到成本</small></span><select id="f-breakeven"><option value="1">開</option><option value="0">關</option></select></label>
   <label class="field"><span>手續費折扣<small>例：0.28 代表 2.8 折</small></span><input id="f-discount" type="number" inputmode="decimal" step="0.01" min="0.1" max="1"></label>
   <button class="primary" id="apply">重新執行代理人</button>
-  <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。<br>谷底反轉風格（建議搭配景氣循環股）：先過循環濾網，最近 2 個月營收年增率都轉正、而且股價比近 2 年高點跌超過 50%，再看上面 6 個條件符合 3 個確認止跌；因為是抄底，關掉大盤和長線濾網，最多抱 60 天。營收用次月 11 日之後才算「已知」，回測不會偷看未來。產業報價止跌目前沒有自動資料，請自己另外確認。<br>其他指標（預設只在谷底反轉開啟）：營收 3 月均上穿 12 月均也算谷底訊號、營收 3 月均跌破 12 月均出場、融資使用率上限 30%、外資或投信連 3 日買超加 1 分；費半濾網和淨值比低檔預設關閉，可自己打開。滿倉模式：收盤後選出的股票，隔天開盤把可用現金平均分配買進，單檔最多占總資產 50%（可調到 100%），關閉時改回原本「每筆最大虧損」的資金控管。閒置現金買 0050：沒有買進訊號時，超過總資產 5% 的現金會在收盤買 0050，有新買單時先賣掉 0050 再買股票（回測用收盤價近似，0050 的買賣不列入交易紀錄和勝率）。首頁三個燈號是美債 10 年殖利率、美元兌台幣、費城半導體，只供參考。</p>
+  <p class="note">進場前先過三道濾網：大盤（0050 在 60 日均線之上）、長線趨勢（個股在 200 日均線之上）、族群分散（同族群最多 1 檔）。再看 6 個條件：EMA5＞EMA10＞EMA20 且站上 EMA20、成交量＞5日均量 1.5 倍、OBV 創 20 日新高、RSI 介於 50–70、收盤突破前 20 日高點、MACD 柱狀體翻正且放大，不只靠單一指標。賺到 1.5 倍風險後停損移到成本。收盤後決定，隔天開盤價成交；跌破 ATR 停損立即出場，收盤跌破出場均線或持有期滿則隔天開盤賣出。積極風格：集中 3 檔、每筆風險 3%、6 選 4 進場、停損 2.5 倍 ATR、跌破 EMA20 才賣、最多抱 20 天。成本已計入手續費與 0.3% 證交稅。<br>谷底反轉風格（建議搭配景氣循環股）：先過循環濾網，最近 2 個月營收年增率都轉正、而且股價比近 2 年高點跌超過 50%，再看上面 6 個條件符合 3 個確認止跌；因為是抄底，關掉大盤和長線濾網，最多抱 60 天。營收用次月 11 日之後才算「已知」，回測不會偷看未來。產業報價止跌目前沒有自動資料，請自己另外確認。<br>其他指標（預設只在谷底反轉開啟）：營收 3 月均上穿 12 月均也算谷底訊號、營收 3 月均跌破 12 月均出場、融資使用率上限 30%、外資或投信連 3 日買超加 1 分；費半濾網和淨值比低檔預設關閉，可自己打開。滿倉模式：收盤後選出的股票，隔天開盤把可用現金平均分配買進，單檔最多占總資產 50%（可調到 100%），關閉時改回原本「每筆最大虧損」的資金控管。閒置現金買 0050：沒有買進訊號時，超過總資產 5% 的現金會在收盤買 0050，有新買單時先賣掉 0050 再買股票（回測用收盤價近似，0050 的買賣不列入交易紀錄和勝率）。首頁六個燈號：美債 10 年殖利率、美元兌台幣、費城半導體，以及 FinMind 的外資近 5 日買賣超、全市場融資餘額、外資台指期淨未平倉。籌碼濾網（預設關閉）：外資期貨淨空單超過 3 萬口、而且近 5 日現貨賣超時暫停買進。觀察名單另外顯示本益比和殖利率，只供參考。</p>
 </div></div>
 
 <div class="sheet-bg" id="tv-sheet"><div class="sheet tv" role="dialog" aria-label="K 線圖">
@@ -363,11 +364,11 @@ const SECTOR = {
 const N_COND = 6;
 const nCond = cfg => N_COND + (cfg&&cfg.instBonus?1:0);   // 開啟法人加分時多 1 個條件
 const PRESETS = {
-  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1},
-  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1},
+  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1, chipFilter:0},
+  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1, chipFilter:0},
   // 谷底反轉：營收年增率轉正＋股價離高點夠遠，再用技術面確認止跌（6 選 3）；抄底所以關掉大盤與長線濾網，抱比較久
   cycle:        {maxPos:4, risk:2,   atrMult:2.5, maxHold:60, minScore:3, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:0, longFilter:0, breakeven:1, cycleFilter:1, ddMin:50,
-                 macroFilter:0, revCross:1, revExit:1, pbrMax:0, muMax:30, instBonus:1, fullInvest:1, maxPct:50, park:1}};
+                 macroFilter:0, revCross:1, revExit:1, pbrMax:0, muMax:30, instBonus:1, fullInvest:1, maxPct:50, park:1, chipFilter:0}};
 const STYLE_LABEL = {aggressive:"積極", conservative:"保守", cycle:"谷底反轉", custom:"自訂"};
 const DEFAULT_CFG = {capital:100000, discount:1, minFee:1, feeRate:0.001425, tax:0.003, minPrice:10, ...PRESETS.aggressive};
 let UNI="active", UNIVERSE=[], STYLE="aggressive";
@@ -430,6 +431,10 @@ function demoData(){
   let t=4.0,w=31,x=4000;
   for(let i=0;i<n;i++){ t=Math.max(2,t+gauss(rq)*0.04); w=w*Math.exp(gauss(rq)*0.003); x*=Math.exp(mkt[i]*1.6);
     macro.tnx.c.push(+t.toFixed(3)); macro.twd.c.push(+w.toFixed(3)); macro.sox.c.push(+x.toFixed(1)); }
+  macro.fiall={dates,c:[]}; macro.margin={dates,c:[]}; macro.txfi={dates,c:[]};
+  let mg=2500, tx=-20000;
+  for(let i=0;i<n;i++){ macro.fiall.c.push(+(mkt[i]*8000+gauss(rq)*60).toFixed(1)); mg*=Math.exp(mkt[i]*0.8+gauss(rq)*0.004); macro.margin.c.push(+mg.toFixed(1));
+    tx=Math.max(-60000,Math.min(20000,tx+mkt[i]*300000+gauss(rq)*1500)); macro.txfi.c.push(Math.round(tx)); }
   return {stocks,bench,macro,source:"demo"};
 }
 
@@ -526,6 +531,8 @@ function cycleTags(s,i){
 function infoTags(s,i){
   const t=[];
   if(!isNaN(s.pbrPct[i])) t.push(`淨值比 ${nf(s.pbr[i],2)}（3年${(s.pbrPct[i]*100).toFixed(0)}%分位）`);
+  if(s.per&&s.per[i]!=null) t.push(`本益比 ${s.per[i]>0?nf(s.per[i],1):"虧損"}`);
+  if(s.dy&&s.dy[i]!=null&&s.dy[i]>0) t.push(`殖利率 ${nf(s.dy[i],1)}%`);
   if(!isNaN(s.muL[i])) t.push(`融資使用率 ${s.muL[i].toFixed(0)}%`);
   if(!isNaN(s.rev3[i])) t.push(`營收3M ${(s.rev3[i]*100).toFixed(0)}% / 12M ${(s.rev12[i]*100).toFixed(0)}%`);
   if(s.revSlow[i]) t.push("營收成長連2月放緩");
@@ -563,10 +570,13 @@ function runAgent(data,cfg,startDate){
   const bMA=rollMean(data.bench.c,60), benchMAAt=new Map(data.bench.dates.map((d,i)=>[d,bMA[i]]));
   let lastBMA=NaN;
   const M=data.macro||{}, soxAt=M.sox?new Map(M.sox.dates.map((d,i)=>[d,i])):null, soxMA=M.sox?rollMean(M.sox.c,60):null;
-  let lastSox=NaN, lastSoxMA=NaN;
+  let lastSox=NaN, lastSoxMA=NaN, lastTx=NaN, lastFi5=NaN;
+  const txAt=M.txfi?new Map(M.txfi.dates.map((d,i)=>[d,M.txfi.c[i]])):null;
+  const fi5At=M.fiall?new Map(M.fiall.dates.map((d,i)=>[d,i>=4?M.fiall.c.slice(i-4,i+1).reduce((a,b)=>a+b,0):NaN])):null;
   const mkt=()=>{
     const mOK=!cfg.mktFilter||!(lastBMA>0)||lastBench>=lastBMA, xOK=!cfg.macroFilter||!(lastSoxMA>0)||lastSox>=lastSoxMA;
-    return {ok:mOK&&xOK, mOK, xOK, bench:lastBench, ma:lastBMA, on:!!cfg.mktFilter, xOn:!!cfg.macroFilter, sox:lastSox, soxMA:lastSoxMA};
+    const cOK=!cfg.chipFilter||!(lastTx<-30000&&lastFi5<0);   // 籌碼濾網：外資期貨淨空單超過 3 萬口、且近 5 日現貨賣超 → 不買
+    return {ok:mOK&&xOK&&cOK, mOK, xOK, cOK, cOn:!!cfg.chipFilter, tx:lastTx, fi5:lastFi5, bench:lastBench, ma:lastBMA, on:!!cfg.mktFilter, xOn:!!cfg.macroFilter, sox:lastSox, soxMA:lastSoxMA};
   };
   let cash=cfg.capital, pos={}, pBuys=[], pSells={}, lastBench=null, pre=null;
   const last={}, trades=[], snaps=[];
@@ -613,6 +623,8 @@ function runAgent(data,cfg,startDate){
     prevBench=lastBench;
     if(benchAt.has(date)){ lastBench=benchAt.get(date); lastBMA=benchMAAt.get(date); }
     if(soxAt&&soxAt.has(date)){ const j=soxAt.get(date); lastSox=M.sox.c[j]; lastSoxMA=soxMA[j]; }
+    if(txAt&&txAt.has(date)) lastTx=txAt.get(date);
+    if(fi5At&&fi5At.has(date)) lastFi5=fi5At.get(date);
     // 起算日之前：只看盤、不交易（起算日前一天收盤決定第一批買單）
     if(startDate&&date<startDate){ pBuys=scan(bars); pre={date,bench:lastBench,mkt:mkt(),pBuys:pBuys.map(o=>({...o}))}; continue; }
     // 1) 開盤賣出
@@ -703,18 +715,20 @@ function mktText(m){
   const a=!m||!m.on?"大盤濾網：關閉":!(m.ma>0)?"大盤濾網：資料不足"
     :okM?`大盤濾網 ✅ 0050（${nf(m.bench,2)}）在 60 日均線（${nf(m.ma,2)}）之上，可以買進`
         :`大盤濾網 ⛔ 0050（${nf(m.bench,2)}）跌破 60 日均線（${nf(m.ma,2)}），暫停新買進`;
-  if(!m||!m.xOn) return a;
+  const cTxt=!m||!m.cOn?"":m.cOK?"\n籌碼濾網 ✅ 外資期貨與現貨沒有同時偏空":`\n籌碼濾網 ⛔ 外資期貨淨空 ${nf(m.tx)} 口、近 5 日賣超，暫停新買進`;
+  if(!m||!m.xOn) return a+cTxt;
   const b=!(m.soxMA>0)?"費半濾網：資料不足":m.xOK?"費半濾網 ✅ 費半在 60 日均線之上":"費半濾網 ⛔ 費半跌破 60 日均線，暫停新買進";
-  return a+"\n"+b;
+  return a+"\n"+b+cTxt;
 }
 // 總體燈號：10 年期美債殖利率、新台幣匯率、費城半導體
 function macroAt(date){
   const M=(DATA&&DATA.macro)||{}, out={};
-  for(const k of ["tnx","twd","sox"]){
+  for(const k of ["tnx","twd","sox","fiall","margin","txfi"]){
     const x=M[k]; if(!x||!x.dates||!x.dates.length) continue;
     let lo=0,hi=x.dates.length-1,j=-1; while(lo<=hi){const m=(lo+hi)>>1; if(x.dates[m]<=date){j=m;lo=m+1}else hi=m-1;}
     if(j<20) continue;
-    out[k]={v:x.c[j], chg:x.c[j]-x.c[j-20], pct:x.c[j]/x.c[j-20]-1, ma:j>=59?x.c.slice(j-59,j+1).reduce((a,b)=>a+b,0)/60:NaN};
+    out[k]={v:x.c[j], chg:x.c[j]-x.c[j-20], pct:x.c[j]/x.c[j-20]-1, ma:j>=59?x.c.slice(j-59,j+1).reduce((a,b)=>a+b,0)/60:NaN,
+      sum5:x.c.slice(j-4,j+1).reduce((a,b)=>a+b,0)};
   }
   return out;
 }
@@ -726,6 +740,13 @@ function renderMacro(date){
     h.push(cell(c,"美元/台幣",m.twd.v.toFixed(2),`20日 ${pct(m.twd.pct,1)}`)); }
   if(m.sox){ const up=m.sox.v>=m.sox.ma, c=isNaN(m.sox.ma)?"y":up?"g":"r";
     h.push(cell(c,"費城半導體",nf(m.sox.v),isNaN(m.sox.ma)?"":up?"60日線上":"跌破60日線")); }
+  // 全市場籌碼（FinMind）
+  if(m.fiall){ const v=m.fiall.sum5, c=v>0?"g":v<-200?"r":"y";
+    h.push(cell(c,"外資近5日",`${sg(v)}${nf(v)} 億`,v>0?"買超":"賣超")); }
+  if(m.margin){ const c=m.margin.pct>0.08?"r":m.margin.pct<-0.08?"y":"g";
+    h.push(cell(c,"融資餘額",`${nf(m.margin.v)} 億`,`20日 ${pct(m.margin.pct,1)}`)); }
+  if(m.txfi){ const v=m.txfi.v, c=v>-10000?"g":v<-30000?"r":"y";
+    h.push(cell(c,"外資期貨",`${sg(v)}${nf(v)} 口`,v>=0?"淨多單":"淨空單")); }
   $("#macro").innerHTML=h.join("");
   $("#macro").style.display=h.length?"":"none";
 }
@@ -995,7 +1016,7 @@ $$(".chips button").forEach(b=>b.onclick=()=>{
 /* ================= 設定 ================= */
 const FIELDS=["capital","maxPos","risk","atrMult","maxHold","minScore","discount","minLots","maxPerSector","ddMin","pbrMax","muMax","maxPct"];
 const PFIELDS=["maxPos","risk","atrMult","maxHold","minScore","minLots","maxPerSector","ddMin","pbrMax","muMax","maxPct"];
-const TOGGLES=["mktFilter","longFilter","breakeven","cycleFilter","macroFilter","revCross","revExit","instBonus","fullInvest","park"];
+const TOGGLES=["mktFilter","longFilter","breakeven","cycleFilter","macroFilter","revCross","revExit","instBonus","fullInvest","park","chipFilter"];
 function openSheet(){
   setPlaying(false);
   $("#f-src").value=SRC; $("#f-years").value=YEARS;

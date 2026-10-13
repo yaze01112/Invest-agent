@@ -121,9 +121,14 @@ def month_revenue(code, start):
 def daily_fields(code, start):
     """淨值比、融資使用率(%)、外資與投信買賣超(張)，依日期整理成 dict。"""
     out = {}
-    for x in finmind("TaiwanStockPER", code, start):
+    for x in finmind("TaiwanStockPER", code, start):  # 同一份資料有淨值比、本益比、殖利率
+        d = out.setdefault(x["date"], {})
         if x.get("PBR"):
-            out.setdefault(x["date"], {})["pbr"] = round(float(x["PBR"]), 2)
+            d["pbr"] = round(float(x["PBR"]), 2)
+        if x.get("PER"):
+            d["per"] = round(float(x["PER"]), 1)
+        if x.get("dividend_yield") is not None:
+            d["dy"] = round(float(x["dividend_yield"]), 2)
     time.sleep(0.3)
     for x in finmind("TaiwanStockMarginPurchaseShortSale", code, start):
         lim = float(x.get("MarginPurchaseLimit") or 0)
@@ -174,7 +179,7 @@ def add_finmind(stocks, prev=None):
             try:
                 f = daily_fields(code, dstart)
                 if f:
-                    for k in ("pbr", "mu", "fi", "it"):  # 對齊股價日期，沒有資料就填 null
+                    for k in ("pbr", "per", "dy", "mu", "fi", "it"):  # 對齊股價日期，沒有資料就填 null
                         s[k] = [f.get(d, {}).get(k) for d in s["dates"]]
                     ok["daily"] += 1
             except LimitHit:
@@ -187,6 +192,44 @@ def add_finmind(stocks, prev=None):
     # 更新狀態（不含 token 本身），放在 data.json 最前面方便檢查
     return dict(token=bool(TOKEN["value"]), token_ok=TOKEN["ok"], token_error=TOKEN["error"], rev=ok["rev"], rev_cached=ok["rev_cached"],
                 daily=ok["daily"], total=len(stocks), limit_hit=sorted(stop), error=last_err[:120])
+
+
+def market_chips(start):
+    """全市場籌碼（各 1 次請求）：外資現貨買賣超（億元）、融資餘額（億元）、外資台指期淨未平倉（口）。"""
+    out = {}
+
+    def series(name, d):
+        if d:
+            ks = sorted(d)
+            out[name] = dict(dates=ks, c=[round(d[k], 2) for k in ks])
+
+    try:
+        d = {}
+        for x in finmind("TaiwanStockTotalInstitutionalInvestors", "", start):
+            if str(x.get("name", "")).startswith("Foreign_Investor"):
+                d[x["date"]] = d.get(x["date"], 0) + (float(x.get("buy") or 0) - float(x.get("sell") or 0)) / 1e8
+        series("fiall", d)
+    except Exception as e:
+        print(f"全市場法人下載失敗：{e}")
+    try:
+        d = {}
+        for x in finmind("TaiwanStockTotalMarginPurchaseShortSale", "", start):
+            if x.get("name") == "MarginPurchaseMoney" and x.get("TodayBalance") is not None:
+                d[x["date"]] = float(x["TodayBalance"]) / 1e8
+        series("margin", d)
+    except Exception as e:
+        print(f"全市場融資下載失敗：{e}")
+    try:
+        d = {}
+        for x in finmind("TaiwanFuturesInstitutionalInvestors", "TX", start):
+            who = str(x.get("institutional_investors", ""))
+            if "外資" in who or "Foreign" in who:
+                d[x["date"]] = d.get(x["date"], 0) + float(x.get("long_open_interest_balance_volume") or 0) - float(x.get("short_open_interest_balance_volume") or 0)
+        series("txfi", d)
+    except Exception as e:
+        print(f"外資期貨下載失敗：{e}")
+    print(f"全市場籌碼：{list(out)}")
+    return out
 
 
 def macro():
@@ -235,7 +278,7 @@ def fill_from_previous(stocks, prev):
             s["rev"] = old["rev"]; n += 1
         if "pbr" not in s and old.get("pbr"):
             pos = {d: i for i, d in enumerate(old.get("dates", []))}
-            for k in ("pbr", "mu", "fi", "it"):
+            for k in ("pbr", "per", "dy", "mu", "fi", "it"):
                 if old.get(k):
                     s[k] = [old[k][pos[d]] if d in pos and pos[d] < len(old[k]) else None for d in s["dates"]]
     if n:
@@ -302,7 +345,16 @@ def main():
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
     names = {c: info[c]["name"] for c in stocks if c in info}
     sectors = {c: info[c]["sector"] for c in stocks if c in info and info[c]["sector"]}
-    data = dict(finmind=status, active=[c for c in active if c in stocks], names=names, sectors=sectors, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=macro(), source="real",
+    mk = macro()
+    try:
+        mk.update(market_chips((dt.date.today() - dt.timedelta(days=365 * 3 + 10)).isoformat()))
+    except LimitHit:
+        print("FinMind 額度用完（全市場籌碼）")
+    for k in ("fiall", "margin", "txfi"):  # 這次沒抓到就沿用上次的
+        if k not in mk and prev.get("macro", {}).get(k):
+            mk[k] = prev["macro"][k]
+    status["market"] = [k for k in ("fiall", "margin", "txfi") if k in mk]
+    data = dict(finmind=status, active=[c for c in active if c in stocks], names=names, sectors=sectors, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=mk, source="real",
                 updated=now.strftime("%Y-%m-%d %H:%M"), last_date=bench["dates"][-1])
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
