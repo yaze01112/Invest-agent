@@ -268,7 +268,7 @@ a.tv-open{text-align:center;text-decoration:none}
   <h3>設定 <button class="icon" id="close-set" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
   <p class="sec-title">資料</p>
   <label class="field"><span>股票池</span>
-    <select id="f-uni"><option value="tech">科技股 30 檔</option><option value="mixed">權值綜合 30 檔</option><option value="cycle">景氣循環股 21 檔</option></select></label>
+    <select id="f-uni"><option value="tech">科技股 30 檔</option><option value="mixed">權值綜合 30 檔</option><option value="cycle">景氣循環股 21 檔</option><option value="active">主動選股（全市場成交值前 100）</option></select></label>
   <label class="field"><span>資料來源</span>
     <select id="f-src"><option value="real">真實台股</option><option value="demo">示範資料</option></select></label>
   <label class="field"><span>績效計算</span>
@@ -341,7 +341,14 @@ const UNIVERSES = {
   ["6505","台塑化"],["2327","國巨"],["2492","華新科"],["1101","台泥"],["1102","亞泥"],
   ["2603","長榮"],["2609","陽明"],["2615","萬海"],["2606","裕民"],["2637","慧洋-KY"]]};
 const NAMES = Object.fromEntries([...UNIVERSES.tech,...UNIVERSES.mixed,...UNIVERSES.cycle]);
-const UNI_LABEL = {tech:"科技股", mixed:"權值綜合", cycle:"循環股"};
+// 主動選股：股票池不是固定名單，而是每天從全市場挑成交值前 100 名（再加上固定名單），清單來自 data.json
+UNIVERSES.active = [];
+const UNI_LABEL = {tech:"科技股", mixed:"權值綜合", cycle:"循環股", active:"主動選股"};
+function uniList(u){
+  if(u!=="active") return UNIVERSES[u]||UNIVERSES.tech;
+  if(REAL_RAW&&REAL_RAW.stocks) return Object.keys(REAL_RAW.stocks).map(c=>[c,(REAL_RAW.names&&REAL_RAW.names[c])||NAMES[c]||c]);
+  const seen=new Set(); return [...UNIVERSES.tech,...UNIVERSES.mixed,...UNIVERSES.cycle].filter(([c])=>!seen.has(c)&&seen.add(c));
+}
 const SECTOR = {
   "2330":"晶圓代工","2303":"晶圓代工","3711":"封測","2449":"封測",
   "2454":"IC設計","2379":"IC設計","3034":"IC設計","3661":"IC設計","3443":"IC設計","5269":"IC設計","3529":"IC設計","4966":"IC設計",
@@ -363,9 +370,9 @@ const PRESETS = {
                  macroFilter:0, revCross:1, revExit:1, pbrMax:0, muMax:30, instBonus:1, fullInvest:1, maxPct:50, park:1}};
 const STYLE_LABEL = {aggressive:"積極", conservative:"保守", cycle:"谷底反轉", custom:"自訂"};
 const DEFAULT_CFG = {capital:100000, discount:1, minFee:1, feeRate:0.001425, tax:0.003, minPrice:10, ...PRESETS.aggressive};
-let UNI="tech", UNIVERSE=UNIVERSES.tech, STYLE="aggressive";
+let UNI="active", UNIVERSE=[], STYLE="aggressive";
 // 兩個代理人各自保存自己的股票池、風格和參數，切換時互不影響
-const AGENT_DEF = {momentum:{UNI:"tech", STYLE:"aggressive"}, cycle:{UNI:"cycle", STYLE:"cycle"}};
+const AGENT_DEF = {momentum:{UNI:"active", STYLE:"aggressive"}, cycle:{UNI:"active", STYLE:"cycle"}};
 let AGENT="momentum", PROFILES={};
 
 /* ================= 示範資料（固定亂數種子，每次結果一樣） ================= */
@@ -384,6 +391,7 @@ function tradingDates(){
 function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function hashSeed(t){let h=2166136261;for(const ch of t){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
 function demoData(){
+  if(UNI==="active"&&!UNIVERSE.length) UNIVERSE=uniList("active");
   const tech=UNI==="tech", dates=tradingDates(), n=dates.length;
   const rm=rng(20230102), mkt=[]; let mt=0.0004;
   for(let i=0;i<n;i++){ if(rm()<0.02) mt=(rm()-0.4)*0.0025; mkt.push(mt+gauss(rm)*0.010); }
@@ -432,7 +440,10 @@ async function fetchReal(){
     const res=await fetch("data.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error("HTTP "+res.status);
     REAL_RAW=await res.json();
+    for(const [c,n] of Object.entries(REAL_RAW.names||{})) if(!NAMES[c]) NAMES[c]=n;
+    for(const [c,k] of Object.entries(REAL_RAW.sectors||{})) if(!SECTOR[c]) SECTOR[c]=k;
   }
+  if(UNI==="active") UNIVERSE=uniList("active");
   const stocks={};
   for(const [code] of UNIVERSE) if(REAL_RAW.stocks[code]) stocks[code]=adjust(JSON.parse(JSON.stringify(REAL_RAW.stocks[code])));
   if(Object.keys(stocks).length<5) throw new Error("資料太少");
@@ -1007,7 +1018,7 @@ $("#apply").onclick=()=>{
   const needFetch=$("#f-src").value!==SRC||$("#f-uni").value!==UNI;
   MODE=$("#f-mode").value; START_DATE=$("#f-start").value||DEFAULT_START;
   SRC=$("#f-src").value; YEARS=+$("#f-years").value;
-  UNI=$("#f-uni").value; UNIVERSE=UNIVERSES[UNI]; STYLE=$("#f-style").value; CFG.exitEma=+$("#f-exitEma").value;
+  UNI=$("#f-uni").value; UNIVERSE=uniList(UNI); STYLE=$("#f-style").value; CFG.exitEma=+$("#f-exitEma").value;
   FIELDS.forEach(f=>{const v=parseFloat($("#f-"+f).value);if(!isNaN(v)&&(v>0||["minLots","ddMin","pbrMax","muMax"].includes(f)))CFG[f]=["maxPos","maxHold","minScore","maxPerSector"].includes(f)?Math.round(v):v});
   TOGGLES.forEach(t=>CFG[t]=+$("#f-"+t).value);
   CFG.minScore=Math.min(nCond(CFG),CFG.minScore);
@@ -1021,7 +1032,7 @@ function stash(){ PROFILES[AGENT]={UNI, STYLE, CFG:{...CFG}}; }
 function applyProfile(a){
   AGENT=AGENT_DEF[a]?a:"momentum";
   const p=PROFILES[AGENT]||profileDefault(AGENT);
-  UNI=UNIVERSES[p.UNI]?p.UNI:AGENT_DEF[AGENT].UNI; UNIVERSE=UNIVERSES[UNI]; STYLE=p.STYLE;
+  UNI=UNIVERSES[p.UNI]?p.UNI:AGENT_DEF[AGENT].UNI; UNIVERSE=uniList(UNI); STYLE=p.STYLE;
   CFG={...DEFAULT_CFG,...p.CFG};
   $$("#agents button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.agent===AGENT));
 }
@@ -1048,11 +1059,12 @@ async function loadSettings(){
       PROFILES[a].CFG={...DEFAULT_CFG,...base,...(PROFILES[a].CFG||{})};
     }
     AGENT=o.AGENT||"momentum";
+    if(!o.ACTIVE_V1) for(const a in PROFILES) PROFILES[a].UNI="active";   // 改版：兩個代理人都改用主動選股（只做一次）
   }catch(e){}
 }
 async function saveSettings(){
   stash();
-  try{ await STORE.set("agent-settings",JSON.stringify({MODE,START_DATE,YEARS,SRC,AGENT,PROFILES}),false); }catch(e){}
+  try{ await STORE.set("agent-settings",JSON.stringify({MODE,START_DATE,YEARS,SRC,AGENT,PROFILES,ACTIVE_V1:1}),false); }catch(e){}
 }
 
 /* ================= 啟動 ================= */

@@ -83,7 +83,7 @@ def _get(url, token):
 
 def finmind(dataset, code, start):
     url = "https://api.finmindtrade.com/api/v4/data?" + urllib.parse.urlencode(
-        dict(dataset=dataset, data_id=code, start_date=start))
+        {k: v for k, v in dict(dataset=dataset, data_id=code, start_date=start).items() if v})
     if TOKEN["value"] and TOKEN["ok"] is not False:
         st, js = _get(url, TOKEN["value"])
         if st == 200 and js.get("status", 200) == 200:
@@ -194,8 +194,48 @@ def macro():
     return out
 
 
+ACTIVE_N = 100  # 主動選股：全市場成交值前幾名
+
+
+def market_list():
+    """FinMind 台股總覽：代號、名稱、產業、上市或上櫃（只要 1 次請求）。只留 4 位數普通股，排除 ETF。"""
+    info = {}
+    for x in finmind("TaiwanStockInfo", "", ""):
+        c = str(x.get("stock_id", ""))
+        if len(c) == 4 and c.isdigit() and not c.startswith("0") and x.get("type") in ("twse", "tpex") and c not in info:
+            info[c] = dict(name=x.get("stock_name", c), sector=x.get("industry_category", ""), otc=x.get("type") == "tpex")
+    return info
+
+
+def pick_active(info, n=ACTIVE_N):
+    """用近 20 個交易日的平均成交值（收盤價 × 成交量）排名，取前 n 名。"""
+    syms = {sym(c, v["otc"]): c for c, v in info.items()}
+    raw = yf.download(list(syms), period="2mo", group_by="ticker", auto_adjust=True, progress=False, threads=True)
+    value = {}
+    for s_, c in syms.items():
+        try:
+            df = raw[s_].dropna().tail(20)
+            if len(df) >= 10:
+                value[c] = float((df["Close"] * df["Volume"]).mean())
+        except Exception:
+            pass
+    top = sorted(value, key=value.get, reverse=True)[:n]
+    print(f"主動選股：全市場 {len(info)} 檔，有成交資料 {len(value)} 檔，取成交值前 {len(top)} 名")
+    return top
+
+
 def main():
-    codes = sorted(set(TECH + MIXED + CYCLE)) + [BENCH]
+    info, active = {}, []
+    try:
+        info = market_list()
+        for c, v in info.items():
+            if v["otc"]:
+                OTC.add(c)
+        active = pick_active(info)
+    except Exception as e:
+        print(f"主動選股失敗，只用固定名單：{e}")
+    fixed = sorted(set(TECH + MIXED + CYCLE))
+    codes = sorted(set(fixed + active)) + [BENCH]
     got = download([sym(c) for c in codes])
     stocks = {c: got[sym(c)] for c in codes if sym(c) in got}
     missing = [c for c in codes if c not in stocks]
@@ -209,7 +249,9 @@ def main():
     bench = stocks.pop(BENCH)
     status = add_finmind(stocks)
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
-    data = dict(finmind=status, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=macro(), source="real",
+    names = {c: info[c]["name"] for c in stocks if c in info}
+    sectors = {c: info[c]["sector"] for c in stocks if c in info and info[c]["sector"]}
+    data = dict(finmind=status, active=[c for c in active if c in stocks], names=names, sectors=sectors, stocks=stocks, bench=dict(dates=bench["dates"], c=bench["c"]), macro=macro(), source="real",
                 updated=now.strftime("%Y-%m-%d %H:%M"), last_date=bench["dates"][-1])
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
