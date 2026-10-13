@@ -57,7 +57,16 @@ class LimitHit(Exception):
     pass
 
 
-TOKEN = {"value": (os.environ.get("FINMIND_TOKEN") or "").strip(), "ok": None, "error": ""}
+def _clean_token(t):
+    """容許貼上時多帶到「Bearer 」、引號、換行或空白。"""
+    t = "".join((t or "").split())  # 去掉所有空白和換行
+    t = t.strip("\"'")
+    if t.lower().startswith("bearer"):
+        t = t[6:]
+    return t.lstrip(":")
+
+
+TOKEN = {"value": _clean_token(os.environ.get("FINMIND_TOKEN")), "ok": None, "error": ""}
 
 
 def _get(url, token):
