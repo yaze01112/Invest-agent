@@ -81,7 +81,20 @@ def _get(url, token):
             return e.code, {}
 
 
+# 每次更新最多向 FinMind 請求幾次（額度每小時 600 次，留一些給全市場籌碼和重試）
+FINMIND_BUDGET = 590   # 硬上限
+STOCK_BUDGET = 550     # 個股最多用到這裡，剩下留給全市場籌碼
+USED = {"n": 0}
+
+
+class BudgetHit(Exception):
+    pass
+
+
 def finmind(dataset, code, start):
+    if USED["n"] >= FINMIND_BUDGET:
+        raise BudgetHit(dataset)
+    USED["n"] += 1
     url = "https://api.finmindtrade.com/api/v4/data?" + urllib.parse.urlencode(
         {k: v for k, v in dict(dataset=dataset, data_id=code, start_date=start).items() if v})
     if TOKEN["value"] and TOKEN["ok"] is not False:
@@ -149,7 +162,8 @@ def latest_rev_date(today):
     return f"{y}-{m:02d}-11"
 
 
-def add_finmind(stocks, prev=None):
+def add_finmind(stocks, prev=None, priority=None):
+    """先抓「今天名單＋固定名單」的股票，其他以前進過名單的股票只補月營收，每日資料沿用上次的，控制請求次數。"""
     today = dt.date.today()
     rstart = (today - dt.timedelta(days=365 * 4 + 40)).isoformat()
     dstart = (today - dt.timedelta(days=365 * 3 + 10)).isoformat()
@@ -158,40 +172,52 @@ def add_finmind(stocks, prev=None):
     need = latest_rev_date(today)
     prev_st = (prev or {}).get("stocks", {})
     last_err = ""
-    for code, s in stocks.items():
+    pri = set(priority or stocks)
+    order = [c for c in stocks if c in pri] + [c for c in stocks if c not in pri]
+    ok["daily_skipped"] = 0
+    for code in order:
+        s = stocks[code]
         old_rev = (prev_st.get(code) or {}).get("rev")
         if old_rev and old_rev[-1][0] >= need:  # 這個月的營收已經抓過，沿用就好，省額度
             s["rev"] = old_rev
             ok["rev"] += 1; ok["rev_cached"] += 1
+        elif "rev" not in stop and USED["n"] + 1 > STOCK_BUDGET:
+            stop.add("rev"); print("FinMind 本次請求上限（月營收），之後的股票沿用上次")
         elif "rev" not in stop:
             try:
                 r = month_revenue(code, rstart)
                 if r:
                     s["rev"] = r
                     ok["rev"] += 1
-            except LimitHit:
-                stop.add("rev"); print("FinMind 額度用完（月營收），之後的股票先跳過")
+            except (LimitHit, BudgetHit) as e:
+                stop.add("rev"); print(f"FinMind {'額度用完' if isinstance(e, LimitHit) else '本次請求上限'}（月營收），之後的股票沿用上次")
             except Exception as e:
                 last_err = f"月營收 {code}: {e}"
                 print(f"{code} 月營收下載失敗：{e}")
             time.sleep(0.3)
-        if "daily" not in stop:
+        if "daily" not in stop and USED["n"] + 3 > STOCK_BUDGET:
+            stop.add("daily"); print("FinMind 本次請求上限（淨值比／融資／法人），之後的股票沿用上次")
+        if code not in pri:  # 不在今天名單和固定名單：每日資料沿用上次的
+            ok["daily_skipped"] += 1
+        elif "daily" not in stop:
             try:
                 f = daily_fields(code, dstart)
                 if f:
                     for k in ("pbr", "per", "dy", "mu", "fi", "it"):  # 對齊股價日期，沒有資料就填 null
                         s[k] = [f.get(d, {}).get(k) for d in s["dates"]]
                     ok["daily"] += 1
-            except LimitHit:
-                stop.add("daily"); print("FinMind 額度用完（淨值比／融資／法人），之後的股票先跳過")
+            except (LimitHit, BudgetHit) as e:
+                stop.add("daily"); print(f"FinMind {'額度用完' if isinstance(e, LimitHit) else '本次請求上限'}（淨值比／融資／法人），之後的股票沿用上次")
             except Exception as e:
                 last_err = f"淨值比等 {code}: {e}"
                 print(f"{code} 淨值比／融資／法人下載失敗：{e}")
             time.sleep(0.3)
-    print(f"月營收：{ok['rev']}/{len(stocks)} 檔（沿用 {ok['rev_cached']} 檔），淨值比／融資／法人：{ok['daily']}/{len(stocks)} 檔")
+    print(f"月營收：{ok['rev']}/{len(stocks)} 檔（沿用 {ok['rev_cached']} 檔），淨值比／融資／法人：{ok['daily']}/{len(pri & set(stocks))} 檔"
+          f"（另有 {ok['daily_skipped']} 檔不在今天名單，沿用上次），FinMind 請求 {USED['n']} 次")
     # 更新狀態（不含 token 本身），放在 data.json 最前面方便檢查
     return dict(token=bool(TOKEN["value"]), token_ok=TOKEN["ok"], token_error=TOKEN["error"], rev=ok["rev"], rev_cached=ok["rev_cached"],
-                daily=ok["daily"], total=len(stocks), limit_hit=sorted(stop), error=last_err[:120])
+                daily=ok["daily"], daily_skipped=ok["daily_skipped"], priority=len(pri & set(stocks)), total=len(stocks),
+                requests=USED["n"], limit_hit=sorted(stop), error=last_err[:120])
 
 
 def market_chips(start):
@@ -383,15 +409,15 @@ def main():
     if BENCH not in stocks or len(stocks) < 20:
         sys.exit(f"下載失敗，只拿到 {len(stocks)} 檔，不更新 data.json")
     bench = stocks.pop(BENCH)
-    status = add_finmind(stocks, prev)
+    status = add_finmind(stocks, prev, priority=set(fixed) | set(active))
     fill_from_previous(stocks, prev)
     names = {c: info[c]["name"] for c in stocks if c in info}
     sectors = {c: info[c]["sector"] for c in stocks if c in info and info[c]["sector"]}
     mk = macro()
     try:
         mk.update(market_chips((dt.date.today() - dt.timedelta(days=365 * 3 + 10)).isoformat()))
-    except LimitHit:
-        print("FinMind 額度用完（全市場籌碼）")
+    except (LimitHit, BudgetHit):
+        print("FinMind 額度用完（全市場籌碼），沿用上次")
     for k in ("fiall", "margin", "txfi"):  # 這次沒抓到就沿用上次的
         if k not in mk and prev.get("macro", {}).get(k):
             mk[k] = prev["macro"][k]
