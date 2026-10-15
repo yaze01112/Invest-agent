@@ -32,7 +32,7 @@ jobs:
       - run: python "update data.py"
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}   # 選填：沒設定也能跑
-      - run: mkdir -p site && cp index.html data.json site/
+      - run: mkdir -p site && cp index.html v0929.html data.json site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
