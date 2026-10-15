@@ -409,6 +409,9 @@ def main():
     if BENCH not in stocks or len(stocks) < 20:
         sys.exit(f"下載失敗，只拿到 {len(stocks)} 檔，不更新 data.json")
     bench = stocks.pop(BENCH)
+    if prev.get("last_date") and bench["dates"][-1] < prev["last_date"]:  # Yahoo 偶爾給舊資料，不要讓網站倒退
+        note(f"Yahoo 這次只給到 {bench['dates'][-1]}，比網站上的 {prev['last_date']} 還舊，這次不更新")
+        sys.exit(1)
     status = add_finmind(stocks, prev, priority=set(fixed) | set(active))
     fill_from_previous(stocks, prev)
     names = {c: info[c]["name"] for c in stocks if c in info}
