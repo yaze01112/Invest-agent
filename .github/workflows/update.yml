@@ -32,7 +32,16 @@ jobs:
       - run: python "update data.py"
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}   # 選填：沒設定也能跑
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 打包 React 版（失敗也不影響原版網站）
+        continue-on-error: true
+        run: npm ci && npm run build
       - run: mkdir -p site && cp index.html v0929.html data.json site/
+      - name: 放上 React 版
+        continue-on-error: true
+        run: cp react.html engine.js app.js site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
