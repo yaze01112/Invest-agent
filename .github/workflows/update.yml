@@ -1,9 +1,7 @@
 name: 更新股價並發佈網頁
 
 on:
-  schedule:
-    - cron: "45 6 * * 1-5"   # 台灣時間 14:45（收盤後）
-    - cron: "0 10 * * 1-5"   # 台灣時間 18:00 再補一次
+  # 每天收盤後的更新改由 Claude 排程在台灣時間 18:05（必要時 21:05 補跑）用 workflow_dispatch 觸發
   workflow_dispatch:          # 可以手動按「Run workflow」
   push:
     branches: [main]
