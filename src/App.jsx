@@ -32,6 +32,7 @@ function loadSettings() {
       for (const a in o.PROFILES || {}) {   // 舊設定沒有的新參數，用該風格的預設值補上
         const p = o.PROFILES[a], base = PRESETS[p.STYLE] || PRESETS[(AGENT_DEF[a] || AGENT_DEF.momentum).STYLE];
         s.PROFILES[a] = { ...p, CFG: { ...DEFAULT_CFG, ...base, ...(p.CFG || {}) } };
+        if (!o.CYCLE_V2 && p.STYLE === "cycle") Object.assign(s.PROFILES[a].CFG, { ddMin: 30, ma60Filter: 1 });   // 改版：谷底反轉加季線、放寬跌幅（只做一次）
       }
     }
   } catch (e) { /* 讀不到就用預設 */ }
@@ -39,7 +40,7 @@ function loadSettings() {
 }
 function saveSettings(s) {
   const PROFILES = { ...s.PROFILES, [s.AGENT]: profileOf(s) };
-  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...s, PROFILES })); } catch (e) { /* 私密瀏覽等情況存不了，沒關係 */ }
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...s, PROFILES, CYCLE_V2: 1 })); } catch (e) { /* 私密瀏覽等情況存不了，沒關係 */ }
 }
 function rangeStart(s) {
   if (s.MODE === "track") return s.START_DATE;

@@ -17,6 +17,7 @@ const SPEC = [
   ["mktFilter", "大盤濾網", "0050 跌破 60 日均線就不買", "onoff"],
   ["longFilter", "長線濾網", "股價要在 200 日均線之上", "onoff"],
   ["cycleFilter", "循環濾網", "營收年增率連 2 月轉正才買", "onoff"],
+  ["ma60Filter", "季線濾網", "股價要站回 60 日均線才買", "onoff"],
   ["ddMin", "距高點跌幅", "%，股價要比近 2 年高點低這麼多", "num", { step: 5, min: 0, max: 90 }],
   ["fullInvest", "滿倉模式", "現金平均買進訊號股，盡量不留現金", "onoff"],
   ["maxPct", "單檔上限", "滿倉時一檔最多占總資產 %", "num", { step: 5, min: 10, max: 100 }],
@@ -33,7 +34,7 @@ const SPEC = [
 ];
 const FIELDS = ["capital", "maxPos", "risk", "atrMult", "maxHold", "minScore", "discount", "minLots", "maxPerSector", "ddMin", "pbrMax", "muMax", "maxPct"];
 const PFIELDS = ["maxPos", "risk", "atrMult", "maxHold", "minScore", "minLots", "maxPerSector", "ddMin", "pbrMax", "muMax", "maxPct"];
-const TOGGLES = ["mktFilter", "longFilter", "breakeven", "cycleFilter", "macroFilter", "revCross", "revExit", "instBonus", "fullInvest", "park", "chipFilter"];
+const TOGGLES = ["mktFilter", "longFilter", "breakeven", "cycleFilter", "macroFilter", "revCross", "revExit", "instBonus", "fullInvest", "park", "chipFilter", "ma60Filter"];
 const PRESET_KEYS = new Set([...PFIELDS, "exitEma", ...TOGGLES]);   // 改了這些就變成「自訂」
 
 const NOTE_DATA = ["真實台股讀取網站上每天收盤後自動更新的 data.json（還原權息的日K）。找不到時會暫時改用示範資料。「從起算日開始」時，代理人只用起算日之前的資料算指標，起算日開盤才開始交易；示範資料每天收盤後會多一天模擬行情。", "主動選股：每個交易日收盤後，把全市場近 20 日平均成交值前 100 名存檔，代理人那天只能從那天的名單買新股票，名單存了就不會再改，所以過去的交易不會因為今天的名單變了而跟著變。2026-09-01 以前沒有存檔，改用固定的科技、權值、循環股池。"];

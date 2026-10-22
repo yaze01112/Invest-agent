@@ -1,7 +1,7 @@
 /* 畫面要顯示的統計與清單（從 index.html 的畫面程式碼搬過來，算法相同）。
    這裡只「讀」代理人跑完的結果 RES，不會改變任何交易。
    score、cycleTags、infoTags、nCond、sizeShares 來自 engine.js */
-/* global score, cycleTags, infoTags, sizeShares */
+/* global score, cycleTags, infoTags, sizeShares, ma60OK */
 import { nf, pct } from "./format.js";
 
 // 到第 k 天為止的績效統計
@@ -84,7 +84,7 @@ export function watchlist(RES, date, snap) {
     if (allow && !allow.has(code)) continue;
     const s = RES.S[code], i = s.at.get(date); if (i === undefined) continue;
     const [sc, rs] = score(s, i, cfg);
-    const cyc = cfg.cycleFilter ? { turn: !!s.revTurn[i], deep: s.dd[i] >= cfg.ddMin / 100, tags: cycleTags(s, i) } : null;
+    const cyc = cfg.cycleFilter ? { turn: !!s.revTurn[i], deep: s.dd[i] >= cfg.ddMin / 100 && ma60OK(s, i, cfg), tags: cycleTags(s, i) } : null;
     out.push({
       code, sc, rs: cyc ? [...cyc.tags, ...rs] : rs, info: infoTags(s, i),
       pbrBad: cfg.pbrMax > 0 && !(s.pbrPct[i] <= cfg.pbrMax / 100), muBad: cfg.muMax > 0 && s.muL[i] > cfg.muMax,

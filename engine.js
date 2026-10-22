@@ -47,11 +47,11 @@ const SECTOR = {
 const N_COND = 6;
 const nCond = cfg => N_COND + (cfg&&cfg.instBonus?1:0);   // 開啟法人加分時多 1 個條件
 const PRESETS = {
-  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1, chipFilter:0},
-  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1, chipFilter:0},
-  // 谷底反轉：營收年增率轉正＋股價離高點夠遠，再用技術面確認止跌（6 選 3）；抄底所以關掉大盤與長線濾網，抱比較久
-  cycle:        {maxPos:4, risk:2,   atrMult:2.5, maxHold:60, minScore:3, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:0, longFilter:0, breakeven:1, cycleFilter:1, ddMin:50,
-                 macroFilter:0, revCross:1, revExit:1, pbrMax:0, muMax:30, instBonus:1, fullInvest:1, maxPct:50, park:1, chipFilter:0}};
+  aggressive:   {maxPos:3, risk:3,   atrMult:2.5, maxHold:20, minScore:4, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1, chipFilter:0, ma60Filter:0},
+  conservative: {maxPos:4, risk:1.5, atrMult:2,   maxHold:10, minScore:5, exitEma:10, minLots:1000, maxPerSector:1, mktFilter:1, longFilter:1, breakeven:1, cycleFilter:0, ddMin:50, macroFilter:0, revCross:0, revExit:0, pbrMax:0, muMax:0, instBonus:0, fullInvest:1, maxPct:50, park:1, chipFilter:0, ma60Filter:0},
+  // 谷底反轉（不限景氣循環股）：營收年增率由負轉正＋股價站回季線（60 日均線）＋離 2 年高點跌 30% 以上，再用技術面確認（6 選 3）；抄底所以關掉大盤與長線濾網，抱比較久
+  cycle:        {maxPos:4, risk:2,   atrMult:2.5, maxHold:60, minScore:3, exitEma:20, minLots:500,  maxPerSector:1, mktFilter:0, longFilter:0, breakeven:1, cycleFilter:1, ddMin:30,
+                 macroFilter:0, revCross:1, revExit:1, pbrMax:0, muMax:30, instBonus:1, fullInvest:1, maxPct:50, park:1, chipFilter:0, ma60Filter:1}};
 const STYLE_LABEL = {aggressive:"積極", conservative:"保守", cycle:"谷底反轉", custom:"自訂"};
 const DEFAULT_CFG = {capital:100000, discount:1, minFee:1, feeRate:0.001425, tax:0.003, minPrice:10, ...PRESETS.aggressive};
 let UNI="active", UNIVERSE=[], STYLE="aggressive";
@@ -166,7 +166,7 @@ function indicators(s){
   const hi=rollMax(s.h,20);
   const e12=ema(s.c,12), e26=ema(s.c,26), macd=e12.map((x,i)=>x-e26[i]), sig=ema(macd,9);
   Object.assign(s,{e5:ema(s.c,5),e10:ema(s.c,10),e20:ema(s.c,20),rsi,obv,obvH:rollMax(obv,20),atr,
-    hist:macd.map((x,i)=>i<34?NaN:x-sig[i]),ma200:rollMean(s.c,200),
+    hist:macd.map((x,i)=>i<34?NaN:x-sig[i]),ma60:rollMean(s.c,60),ma200:rollMean(s.c,200),
     vm5:rollMean(s.v,5),vm20:rollMean(s.v,20),hi20:[NaN,...hi.slice(0,-1)]});
   // 循環股訊號：最近 2 個月營收年增率都 > 0，且再往前 4 個月內曾經 ≤ 0（＝剛轉正）
   const rv=(s.rev||[]).slice().sort((a,b)=>a[0]<b[0]?-1:1);
@@ -208,9 +208,10 @@ function indicators(s){
   s.at=new Map(s.dates.map((d,i)=>[d,i]));
   return s;
 }
-function cycleOK(s,i,cfg){ return (s.revTurn[i]||(cfg.revCross&&s.revUp[i]))&&s.dd[i]>=cfg.ddMin/100; }
+function ma60OK(s,i,cfg){ return !cfg.ma60Filter||s.c[i]>s.ma60[i]; }   // 站回季線：收盤在 60 日均線之上
+function cycleOK(s,i,cfg){ return (s.revTurn[i]||(cfg.revCross&&s.revUp[i]))&&s.dd[i]>=cfg.ddMin/100&&ma60OK(s,i,cfg); }
 function cycleTags(s,i){
-  return [`營收年增${isNaN(s.revYoY[i])?"—":sg(s.revYoY[i])+(s.revYoY[i]*100).toFixed(1)+"%"}（${s.revTurn[i]?"連2月轉正":s.revUp[i]?"3M上穿12M":"未轉正"}）`,`距2年高點 -${(s.dd[i]*100).toFixed(0)}%`];
+  return [`營收年增${isNaN(s.revYoY[i])?"—":sg(s.revYoY[i])+(s.revYoY[i]*100).toFixed(1)+"%"}（${s.revTurn[i]?"連2月轉正":s.revUp[i]?"3M上穿12M":"未轉正"}）`,`距2年高點 -${(s.dd[i]*100).toFixed(0)}%`,s.c[i]>s.ma60[i]?"站上季線":"季線之下"];
 }
 // 補充資訊：淨值比分位、融資使用率、營收趨勢（顯示用）
 function infoTags(s,i){
@@ -298,7 +299,7 @@ function runAgent(data,cfg,startDate){
       if(allow&&!allow.has(code)) continue;
       if(pos[code]||s.c[i]<cfg.minPrice||!(s.vm20[i]>=cfg.minLots*1000)||!(s.atr[i]>0)) continue;
       if(cfg.longFilter&&!(s.c[i]>s.ma200[i])) continue;   // 長線趨勢：站上 200 日均線
-      if(cfg.cycleFilter&&!cycleOK(s,i,cfg)) continue;     // 谷底反轉：營收剛轉正＋離高點夠遠
+      if(cfg.cycleFilter&&!cycleOK(s,i,cfg)) continue;     // 谷底反轉：營收剛轉正＋站回季線＋離高點夠遠
       if(cfg.pbrMax>0&&!(s.pbrPct[i]<=cfg.pbrMax/100)) continue;   // 淨值比要在近 3 年低檔
       if(cfg.muMax>0&&s.muL[i]>cfg.muMax) continue;                  // 融資使用率太高不買（沒有資料就不擋）
       const [sc,rs]=score(s,i,cfg);
